@@ -1,12 +1,5 @@
-#include "tokenizer.h"
 #include <string.h>
-
-typedef struct TokenIterator {
-  const char *input;
-  size_t len;
-  const char *it;
-  Token current_token;
-} TokenIterator;
+#include "tokenizer.h"
 
 static inline unsigned int hashKeyword(
     register const char *str, register size_t len) {
@@ -89,4 +82,195 @@ static TokenType lookupKeyword(register const char *str, register size_t len) {
     }
   }
   return TOKEN_INVALID;
+}
+
+typedef struct TokenIterator {
+  const char *input;
+  size_t len;
+  const char *it;
+  Token current;
+} TokenIterator;
+
+static TokenIterator iterator = {.current.type = TOKEN_INVALID};
+
+void InitTokenizer(const char *input, size_t len) {
+  iterator.input = input;
+  iterator.len = len;
+  iterator.it = input;
+}
+
+static inline void advanceInputIterator() {
+  if (iterator.it - iterator.input < iterator.len) {
+    ++iterator.it;
+  }
+}
+
+static inline char getNextCharacter() {
+  advanceInputIterator();
+  return *iterator.it;
+}
+
+static inline char peekCharacter() {
+  return *iterator.it;
+}
+
+const Token *PeekToken() {
+  return &iterator.current;
+}
+
+const Token *NextToken() {
+  char c = peekCharacter();
+
+repeat:
+  if (!c) {
+    iterator.current.type = TOKEN_END_OF_STREAM;
+    return &iterator.current;
+  }
+
+  switch (c) {
+    case '+': {
+      advanceInputIterator();
+      iterator.current.type = TOKEN_PLUS;
+    } break;
+    case '-': {
+      c = getNextCharacter();
+      if (c != '-') {
+        iterator.current.type = TOKEN_MINUS;
+      } else {
+        while (c != '\n' && c != 0) {
+          c = getNextCharacter();
+        }
+        goto repeat;
+      }
+    } break;
+    case '*': {
+      iterator.current.type = TOKEN_ASTERISK;
+      advanceInputIterator();
+    } break;
+    case '/': {
+      iterator.current.type = TOKEN_DIVIDE;
+      c = getNextCharacter();
+      if (c == '/') {
+        iterator.current.type = TOKEN_DIV;
+        advanceInputIterator();
+      }
+    } break;
+    case '%': {
+      iterator.current.type = TOKEN_MOD;
+      advanceInputIterator();
+    } break;
+    case '^': {
+      iterator.current.type = TOKEN_BXOR;
+      advanceInputIterator();
+    } break;
+    case '#': {
+      iterator.current.type = TOKEN_DASH;
+      advanceInputIterator();
+    } break;
+    case '&': {
+      iterator.current.type = TOKEN_AT;
+      advanceInputIterator();
+    } break;
+    case '~': {
+      iterator.current.type = TOKEN_BNOT;
+      c = getNextCharacter();
+      if (c == '=') {
+        iterator.current.type = TOKEN_BNOT_ASSIGN;
+        advanceInputIterator();
+      }
+    } break;
+    case '|': {
+      iterator.current.type = TOKEN_BOR;
+      advanceInputIterator();
+    } break;
+    case '<': {
+      iterator.current.type = TOKEN_LESS;
+      c = getNextCharacter();
+      if (c == '<') {
+        iterator.current.type = TOKEN_BLEFT;
+        advanceInputIterator();
+      } else if (c == '=') {
+        iterator.current.type = TOKEN_LESS_EQUAL;
+        advanceInputIterator();
+      }
+    } break;
+    case '>': {
+      iterator.current.type = TOKEN_BIGGER;
+      c = getNextCharacter();
+      if (c == '>') {
+        iterator.current.type = TOKEN_BRIGHT;
+        advanceInputIterator();
+      }
+    } break;
+    case '=': {
+      iterator.current.type = TOKEN_ASSIGN;
+      c = getNextCharacter();
+      if (c == '=') {
+        iterator.current.type = TOKEN_EQUALS;
+        advanceInputIterator();
+      } else if (c == '>') {
+        iterator.current.type = TOKEN_BIGGER_EQUAL;
+        advanceInputIterator();
+      }
+    } break;
+    case '(': {
+      iterator.current.type = TOKEN_LEFT_PAREN;
+      advanceInputIterator();
+    } break;
+    case ')': {
+      iterator.current.type = TOKEN_RIGHT_PAREN;
+      advanceInputIterator();
+    } break;
+    case '{': {
+      iterator.current.type = TOKEN_LEFT_BRACE;
+      advanceInputIterator();
+    } break;
+    case '}': {
+      iterator.current.type = TOKEN_RIGHT_BRACE;
+      advanceInputIterator();
+    } break;
+    case '[': {
+      iterator.current.type = TOKEN_LEFT_BRACKET;
+      advanceInputIterator();
+    } break;
+    case ']': {
+      iterator.current.type = TOKEN_RIGHT_BRACKET;
+      advanceInputIterator();
+    } break;
+    case ';': {
+      iterator.current.type = TOKEN_SEMICOLON;
+      advanceInputIterator();
+    } break;
+    case ':': {
+      iterator.current.type = TOKEN_COLON;
+      c = getNextCharacter();
+      if (c == ':') {
+        iterator.current.type = TOKEN_COLON_COLON;
+        advanceInputIterator();
+      }
+    } break;
+    case ',': {
+      iterator.current.type = TOKEN_COMMA;
+      advanceInputIterator();
+    } break;
+    case '.': {
+      iterator.current.type = TOKEN_PERIOD;
+      c = getNextCharacter();
+      if (c == '.') {
+        iterator.current.type = TOKEN_2PERIOD;
+        c = getNextCharacter();
+        if (c == '.') {
+          iterator.current.type = TOKEN_3PERIOD;
+          advanceInputIterator();
+        }
+      }
+    } break;
+    case ' ':
+    case '\t':
+    case '\n': {
+      c = getNextCharacter();
+      goto repeat;
+    } break;
+  }
+  return &iterator.current;
 }
