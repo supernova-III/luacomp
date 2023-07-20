@@ -6,15 +6,8 @@ void *Malloc(size_t size);
 void *Realloc(void *ptr, size_t size);
 void *Calloc(size_t n, size_t size);
 
-typedef struct {
-  size_t size;
-  size_t capacity;
-  uint8_t data[];
-} Buffer;
-
 typedef struct ListNode {
   struct ListNode *next;
-  struct ListNode *prev;
   size_t size;
   uint8_t data[];
 } ListNode;

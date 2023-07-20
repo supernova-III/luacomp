@@ -28,23 +28,23 @@ void *Calloc(size_t n, size_t size) {
 
 List InitList(const void *data, AllocateListNodeFunction *node_allocator) {
   List result = {.node_allocator = node_allocator};
-  if (!data || !node_allocator) {
+  if (!node_allocator) {
     return result;
   }
-
   ListNode *node = node_allocator(data);
   result.head = node;
   result.tail = node;
+  result.tail->next = NULL;
+  result.head->next = result.tail;
   return result;
 }
 
 ListNode *PushToList(List *list, const void *data) {
-  if (!data || !list) return NULL;
+  if (!list) return NULL;
 
   ListNode *node = list->node_allocator(data);
   if (!node) return NULL;
-  node->prev = list->tail;
-  node->next = list->head;
+  list->tail->next = node;
   list->tail = node;
   return node;
 }

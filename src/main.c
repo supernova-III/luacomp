@@ -7,9 +7,9 @@
 typedef struct {
   const char *string;
   size_t len;
-} StringView;
+} Span;
 
-static StringView inputFromFile(int argc, char **argv) {
+static Span inputFromFile(int argc, char **argv) {
   StringView result = {0};
   if (argc < 2) {
     printf("Error: no input file.\n");
@@ -41,7 +41,7 @@ static StringView inputFromFile(int argc, char **argv) {
     exit(EXIT_FAILURE);
   }
   fclose(input_file);
-  return (StringView){.string = input_buffer, .len = n_read};
+  return (Span){.string = input_buffer, .len = n_read};
 }
 
 #define STRING_VIEW(literal) \
@@ -49,8 +49,16 @@ static StringView inputFromFile(int argc, char **argv) {
 
 int main(int argc, char **argv) {
   // StringView input = inputFromFile(argc, argv);
-  StringView input = STRING_VIEW("123 + 0xfep12");
+  Span input = STRING_VIEW("asd = 123 + 0xfep12");
   InitTokenizer(input.string, input.len);
+
+  const Token *token = NextToken();
+  while (token->type != TOKEN_END_OF_STREAM) {
+    if (token->type == TOKEN_INVALID) {
+      break;
+    }
+    token = NextToken();
+  }
 
   return 0;
 }
