@@ -376,6 +376,97 @@ static inline TokenType scanDiGraph2(TokenType main_value, TokenType alt1,
   return res;
 }
 
+typedef struct {
+  char c;
+  TokenType t;
+} CharTokenPair;
+
+typedef struct {
+  TokenType main_type;
+  size_t size;
+  CharTokenPair pairs[2];
+} ScannerTableEntry;
+
+// clang-format off
+static const ScannerTableEntry scanner_table[] = {
+    [TOKEN_DIVIDE] = {
+      .main_type = TOKEN_DIVIDE,
+      .size = 1,
+      .pairs = {
+        [0] = {.c = '/', .t = TOKEN_DIV}
+      }
+    },
+    [TOKEN_BNOT] = {
+      .main_type = TOKEN_BNOT,
+      .size = 1,
+      .pairs = {[0] = {.c = '=', .t = TOKEN_BNOT_ASSIGN}
+      }
+    },
+    [TOKEN_LESS] = {
+      .main_type = TOKEN_LESS,
+      .size = 2,
+      .pairs = {
+        [0] = {.c = '<', .t = TOKEN_BLEFT},
+        [1] = {.c = '=', .t = TOKEN_LESS_EQUAL}
+      }
+    },
+    [TOKEN_BIGGER] = {
+      .main_type = TOKEN_BIGGER,
+      .size = 2,
+      .pairs = {
+        [0] = {.c = '>', .t = TOKEN_BRIGHT},
+        [1] = {.c = '=', .t = TOKEN_BIGGER_EQUAL}
+      }
+    },
+    [TOKEN_ASSIGN] = {
+      .main_type = TOKEN_ASSIGN,
+      .size = 1,
+      .pairs = {
+        [0] = {.c = '=', .t = TOKEN_EQUALS}
+      }
+    },
+    [TOKEN_COLON] = {
+      .main_type = TOKEN_COLON,
+      .size = 1,
+      .pairs = {
+        [0] = {.c = ':', .t = TOKEN_COLON_COLON}
+      }
+    },
+    [TOKEN_PLUS] = {.main_type = TOKEN_PLUS, 0},
+    [TOKEN_ASTERISK] = {.main_type = TOKEN_ASTERISK, 0},
+    [TOKEN_MOD] = {.main_type = TOKEN_MOD, 0},
+    [TOKEN_BXOR] = {.main_type = TOKEN_BXOR, 0},
+    [TOKEN_DASH] = {.main_type = TOKEN_DASH, 0},
+    [TOKEN_AT] = {.main_type = TOKEN_AT, 0},
+    [TOKEN_BOR] = {.main_type = TOKEN_AT, 0},
+    [TOKEN_LEFT_PAREN] = {.main_type = TOKEN_LEFT_PAREN, 0},
+    [TOKEN_RIGHT_PAREN] = {.main_type = TOKEN_RIGHT_PAREN, 0},
+    [TOKEN_LEFT_BRACE] = {.main_type = TOKEN_LEFT_BRACE, 0},
+    [TOKEN_RIGHT_BRACE] = {.main_type = TOKEN_RIGHT_BRACE, 0},
+    [TOKEN_LEFT_BRACKET] = {.main_type = TOKEN_LEFT_BRACKET, 0},
+    [TOKEN_RIGHT_BRACKET] = {.main_type = TOKEN_RIGHT_BRACKET, 0},
+    [TOKEN_SEMICOLON] = {.main_type = TOKEN_SEMICOLON, 0},
+    [TOKEN_COMMA] = {.main_type = TOKEN_COMMA, 0}
+};
+// clang-format on
+static inline TokenType scanWithTable(char c) {
+  const ScannerTableEntry *entry = &scanner_table[c];
+  TokenType res = c;
+  if (entry->size == 0) {
+    advanceInputIterator();
+  } else {
+    for (size_t i = 0; i < entry->size; ++i) {
+      c = getNextCharacter();
+      const CharTokenPair *pair = &entry->pairs[i];
+      if (pair->c == c) {
+        res = pair->t;
+        break;
+      }
+    }
+  }
+  return res;
+}
+
 const Token *NextToken() {
   char c = peekCharacter();
 
@@ -400,27 +491,6 @@ repeat:
         }
         goto repeat;
       }
-    } break;
-    case '/': {
-      iterator.current.type = scanDiGraph(TOKEN_DIVIDE, '/', TOKEN_DIV);
-    } break;
-    case '~': {
-      iterator.current.type = scanDiGraph(TOKEN_BNOT, '/', TOKEN_BNOT_ASSIGN);
-    } break;
-    case '<': {
-      iterator.current.type =
-          scanDiGraph2(TOKEN_LESS, TOKEN_BLEFT, '<', TOKEN_LESS_EQUAL, '=');
-    } break;
-    case '>': {
-      iterator.current.type = scanDiGraph(TOKEN_BIGGER, '>', TOKEN_BRIGHT);
-    } break;
-    case '=': {
-      iterator.current.type = scanDiGraph2(
-          TOKEN_ASSIGN, TOKEN_EQUALS, '=', TOKEN_BIGGER_EQUAL, '>');
-
-    } break;
-    case ':': {
-      iterator.current.type = scanDiGraph(TOKEN_COLON, ':', TOKEN_COLON_COLON);
     } break;
     case '.': {
       iterator.current.type = TOKEN_PERIOD;
@@ -480,8 +550,7 @@ repeat:
       goto repeat;
     } break;
     default: {
-      iterator.current.type = c;
-      advanceInputIterator();
+      iterator.current.type = scanWithTable(c);
     }
   }
   return &iterator.current;

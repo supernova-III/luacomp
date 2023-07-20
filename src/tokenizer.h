@@ -31,12 +31,12 @@ typedef enum {
   TOKEN_PLUS = '+',           // ok
   TOKEN_MINUS,                // ok
   TOKEN_ASTERISK = '*',       // ok
-  TOKEN_DIVIDE,               // ok
+  TOKEN_DIVIDE = '/',         // ok
   TOKEN_MOD = '%',            // ok
   TOKEN_BXOR = '^',           // ok
   TOKEN_DASH = '#',           // ok
   TOKEN_AT = '&',             // ok
-  TOKEN_BNOT,                 // ok
+  TOKEN_BNOT = '~',           // ok
   TOKEN_BOR = '|',            // ok
   TOKEN_BLEFT,                // ok
   TOKEN_BRIGHT,               // ok
@@ -45,9 +45,9 @@ typedef enum {
   TOKEN_BNOT_ASSIGN,          // ok
   TOKEN_LESS_EQUAL,           // ok
   TOKEN_BIGGER_EQUAL,         // ok
-  TOKEN_LESS,                 // ok
-  TOKEN_BIGGER,               // ok
-  TOKEN_ASSIGN,               // ok
+  TOKEN_LESS = '<',           // ok
+  TOKEN_BIGGER = '>',         // ok
+  TOKEN_ASSIGN = '=',         // ok
   TOKEN_LEFT_PAREN = '(',     // ok
   TOKEN_RIGHT_PAREN = ')',    // ok
   TOKEN_LEFT_BRACE = '{',     // ok
@@ -56,7 +56,7 @@ typedef enum {
   TOKEN_RIGHT_BRACKET = ']',  // ok
   TOKEN_COLON_COLON,          // ok
   TOKEN_SEMICOLON = ';',      // ok
-  TOKEN_COLON,                // ok
+  TOKEN_COLON = ':',          // ok
   TOKEN_COMMA = ',',          // ok
   TOKEN_PERIOD,               // ok
   TOKEN_2PERIOD,              // ok
