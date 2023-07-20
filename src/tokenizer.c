@@ -425,20 +425,18 @@ static const ScannerTableEntry scanner_table[] = {
     [TOKEN_COMMA] = {.main_type = TOKEN_COMMA, 0}
 };
 // clang-format on
+
 static inline TokenType scanWithTable(char c) {
   const ScannerTableEntry *entry = &scanner_table[c];
   TokenType res = c;
   if (entry->size == 0) {
     advanceInputIterator();
   } else {
-    for (size_t i = 0; i < entry->size; ++i) {
+    size_t i = 0;
+    for (; i < entry->size && c == entry->pairs[i].c; ++i) {
       c = getNextCharacter();
-      const CharTokenPair *pair = &entry->pairs[i];
-      if (pair->c == c) {
-        res = pair->t;
-        break;
-      }
     }
+    res = entry->pairs[i].t;
   }
   return res;
 }
