@@ -352,6 +352,30 @@ const Token *PeekToken() {
   return &iterator.current;
 }
 
+static inline TokenType scanDiGraph(TokenType alt1, char next, TokenType alt2) {
+  TokenType res = alt1;
+  char c = getNextCharacter();
+  if (c == next) {
+    res = alt2;
+    advanceInputIterator();
+  }
+  return res;
+}
+
+static inline TokenType scanDiGraph2(TokenType main_value, TokenType alt1,
+    char next1, TokenType alt2, char next2) {
+  TokenType res = main_value;
+  char c = getNextCharacter();
+  if (c == next1) {
+    res = alt1;
+    advanceInputIterator();
+  } else if (c == next2) {
+    res = alt2;
+    advanceInputIterator();
+  }
+  return res;
+}
+
 const Token *NextToken() {
   char c = peekCharacter();
 
@@ -377,67 +401,26 @@ repeat:
         goto repeat;
       }
     } break;
-    case '*': {
-      iterator.current.type = TOKEN_ASTERISK;
-      advanceInputIterator();
-    } break;
     case '/': {
-      iterator.current.type = TOKEN_DIVIDE;
-      c = getNextCharacter();
-      if (c == '/') {
-        iterator.current.type = TOKEN_DIV;
-        advanceInputIterator();
-      }
+      iterator.current.type = scanDiGraph(TOKEN_DIVIDE, '/', TOKEN_DIV);
     } break;
     case '~': {
-      iterator.current.type = TOKEN_BNOT;
-      c = getNextCharacter();
-      if (c == '=') {
-        iterator.current.type = TOKEN_BNOT_ASSIGN;
-        advanceInputIterator();
-      }
-    } break;
-    case '|': {
-      iterator.current.type = TOKEN_BOR;
-      advanceInputIterator();
+      iterator.current.type = scanDiGraph(TOKEN_BNOT, '/', TOKEN_BNOT_ASSIGN);
     } break;
     case '<': {
-      iterator.current.type = TOKEN_LESS;
-      c = getNextCharacter();
-      if (c == '<') {
-        iterator.current.type = TOKEN_BLEFT;
-        advanceInputIterator();
-      } else if (c == '=') {
-        iterator.current.type = TOKEN_LESS_EQUAL;
-        advanceInputIterator();
-      }
+      iterator.current.type =
+          scanDiGraph2(TOKEN_LESS, TOKEN_BLEFT, '<', TOKEN_LESS_EQUAL, '=');
     } break;
     case '>': {
-      iterator.current.type = TOKEN_BIGGER;
-      c = getNextCharacter();
-      if (c == '>') {
-        iterator.current.type = TOKEN_BRIGHT;
-        advanceInputIterator();
-      }
+      iterator.current.type = scanDiGraph(TOKEN_BIGGER, '>', TOKEN_BRIGHT);
     } break;
     case '=': {
-      iterator.current.type = TOKEN_ASSIGN;
-      c = getNextCharacter();
-      if (c == '=') {
-        iterator.current.type = TOKEN_EQUALS;
-        advanceInputIterator();
-      } else if (c == '>') {
-        iterator.current.type = TOKEN_BIGGER_EQUAL;
-        advanceInputIterator();
-      }
+      iterator.current.type = scanDiGraph2(
+          TOKEN_ASSIGN, TOKEN_EQUALS, '=', TOKEN_BIGGER_EQUAL, '>');
+
     } break;
     case ':': {
-      iterator.current.type = TOKEN_COLON;
-      c = getNextCharacter();
-      if (c == ':') {
-        iterator.current.type = TOKEN_COLON_COLON;
-        advanceInputIterator();
-      }
+      iterator.current.type = scanDiGraph(TOKEN_COLON, ':', TOKEN_COLON_COLON);
     } break;
     case '.': {
       iterator.current.type = TOKEN_PERIOD;
