@@ -352,30 +352,6 @@ const Token *PeekToken() {
   return &iterator.current;
 }
 
-static inline TokenType scanDiGraph(TokenType alt1, char next, TokenType alt2) {
-  TokenType res = alt1;
-  char c = getNextCharacter();
-  if (c == next) {
-    res = alt2;
-    advanceInputIterator();
-  }
-  return res;
-}
-
-static inline TokenType scanDiGraph2(TokenType main_value, TokenType alt1,
-    char next1, TokenType alt2, char next2) {
-  TokenType res = main_value;
-  char c = getNextCharacter();
-  if (c == next1) {
-    res = alt1;
-    advanceInputIterator();
-  } else if (c == next2) {
-    res = alt2;
-    advanceInputIterator();
-  }
-  return res;
-}
-
 typedef struct {
   char c;
   TokenType t;
