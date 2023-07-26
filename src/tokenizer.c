@@ -24,6 +24,7 @@ void InitTokenizer(const char *input, size_t len) {
   identifier_memory_pool = allocateMemoryPool(32 * 1024 * 1024);
   if (!string_table || !string_nodes_pool || !identifier_memory_pool) {
     printf("No enough memory\n");
+    exit(EXIT_FAILURE);
   }
 }
 
@@ -33,8 +34,7 @@ const Token *PeekToken() {
 
 const Token *NextToken() {
   char c = peekCharacter();
-
-repeat:
+NextToken_repeat:
   if (!c) {
     iterator.current.type = TOKEN_END_OF_STREAM;
     return &iterator.current;
@@ -53,7 +53,7 @@ repeat:
         while (c != '\n' && c != 0) {
           c = getNextCharacter();
         }
-        goto repeat;
+        goto NextToken_repeat;
       }
     } break;
     case '.': {
@@ -67,28 +67,62 @@ repeat:
           advanceInputIterator();
         }
       } else if (isDigit(c)) {
+        iterator.current.type = TOKEN_NUMBER;
         // here we parse numbers like .123 or .123e123
-        c = getNextCharacter();
-        while (isDigit(c)) {
-          c = getNextCharacter();
-        }
+        EvaluateIntegerResult res = scanAndEvaluateInteger(10);
+        c = res.c;
+        double number = res.magnitude / res.power_of_base;
 
         if (c == 'e' || c == 'E') {
-          // exponent
-        } else {
+          res = evaluateExponent(10);
+          c = res.c;
+          number *= res.magnitude;
         }
+
+        iterator.current.value.number = number;
       }
     } break;
     // clang-format off
     case '0': case '1': case '2': case '3': case '4': case '5':
     case '6': case '7': case '8': case '9': {
       // clang-format on
-      // There are different kinds of numbers in lua:
-      // 1. Decimal integers: [0-9]+
-      // 2. Hex integers: 0x[0-9a-fA-F]+
-      // 3. Float numbers: [0-9]+.[0-9]* ([eE][+-][0-9]+)?
-      // 5. Hexadecimal float: 0x([0-9a-fA-F]*.[0-9a-fA-F]+ |
-      // [0-9a-fA-F]+.[0-9a-fA-F]*)([pP][+-][0-9]+)?
+      double base = 10;
+      if (c == '0') {
+        c = getNextCharacter();
+        base += 6 * (c == 'x' || c == 'X');
+      }
+      EvaluateIntegerResult eval_res = scanAndEvaluateInteger(base);
+      c = eval_res.c;
+      double number = eval_res.magnitude * eval_res.power_of_base;
+      if (c == '.') {
+        c = getNextCharacter();
+        if (isHexadecimal(c)) {
+          eval_res = scanAndEvaluateInteger(base);
+          c = eval_res.c;
+          number += eval_res.magnitude / eval_res.power_of_base;
+        }
+      }
+      if (c == 'e' || c == 'E') {
+        if (base == 10) {
+          eval_res = evaluateExponent(10);
+          c = eval_res.c;
+          number *= eval_res.magnitude;
+        } else {
+          printf(
+              "Base 10 exponent cannot be used with with non-decimal "
+              "numbers\n");
+          exit(EXIT_FAILURE);
+        }
+      } else if (c == 'p' || c == 'P') {
+        if (base == 16) {
+          eval_res = evaluateExponent(2);
+          c = eval_res.c;
+          number *= eval_res.magnitude;
+        } else {
+          printf("Base 2 exponen cannot be used with non-hex numbers\n");
+          exit(EXIT_FAILURE);
+        }
+      }
     } break;
     // clang-format off
     case 'a': case 'b': case 'c': case 'd': case 'e': case 'f': case 'g':
@@ -114,6 +148,7 @@ repeat:
         Identifier *identifier = insertString(&string_table, start, len);
         if (!identifier) {
           printf("Cannot store identifier\n");
+          exit(EXIT_FAILURE);
         }
         iterator.current.value.identifier = identifier;
       }
@@ -122,7 +157,7 @@ repeat:
     case '\t':
     case '\n': {
       c = getNextCharacter();
-      goto repeat;
+      goto NextToken_repeat;
     } break;
     // clang-format off
     case '+': case '*': case '%': case '#': case '&': case '|': case '(':
@@ -138,6 +173,7 @@ repeat:
     } break;
     default: {
       printf("Unexpected character: %c\n", c);
+      exit(EXIT_FAILURE);
     }
   }
   return &iterator.current;
@@ -445,10 +481,75 @@ static inline TokenType scanWithTable(char c) {
     advanceInputIterator();
   } else {
     size_t i = 0;
-    for (; i < entry->size && c == entry->pairs[i].c; ++i) {
-      c = getNextCharacter();
+    c = getNextCharacter();
+    while (i < entry->size) {
+      if (c == entry->pairs[i].c) {
+        res = entry->pairs[i].t;
+        break;
+      }
+      ++i;
     }
-    res = entry->pairs[i].t;
   }
   return res;
+}
+
+static inline size_t mapBaseToIndex(double base) {
+  const size_t output = ((size_t)base - 10) / 6;
+  return output;
+}
+
+typedef bool CharCheckerFuncType(char c);
+typedef double CharConverterFuncType(char c);
+static CharCheckerFuncType *checkers[] = {isDigit, isHexadecimal};
+static CharConverterFuncType *converters[] = {charToDigit, hexToNumber};
+
+static EvaluateIntegerResult scanAndEvaluateInteger(double base) {
+  const char *start = iterator.it;
+  char c = getNextCharacter();
+  const size_t index = mapBaseToIndex(base);
+  CharCheckerFuncType *isCharOk = checkers[index];
+  CharConverterFuncType *convertChar = converters[index];
+  if (!isCharOk(c)) {
+    return (EvaluateIntegerResult){.c = c};
+  }
+  while (isCharOk(c)) {
+    c = getNextCharacter();
+  }
+  const size_t len = iterator.it - start;
+  EvaluateIntegerResult result = {0};
+  double magnitude = 0;
+  double power_of_base = 1;
+  for (size_t i = 0; i < len; ++i) {
+    magnitude += power_of_base * convertChar(start[len - i - 1]);
+    power_of_base *= base;
+  }
+  return (EvaluateIntegerResult){
+      .magnitude = magnitude, .power_of_base = power_of_base, .c = c};
+}
+
+static EvaluateIntegerResult evaluateExponent(double base) {
+  char c = getNextCharacter();
+  double sign = 1;
+  if (c == '-') {
+    sign = -1;
+    c = getNextCharacter();
+  }
+  double exponential_part = 1;
+  if (isDigit(c)) {
+    EvaluateIntegerResult res = scanAndEvaluateInteger(base);
+    c = res.c;
+    size_t power = (size_t)(res.magnitude * res.power_of_base);
+    double power_of_base = 1;
+    for (size_t i = 0; i < power; ++i) {
+      power_of_base *= base;
+    }
+    if (sign == -1) {
+      exponential_part /= power_of_base;
+    } else {
+      exponential_part *= power_of_base;
+    }
+  } else {
+    printf("Expected integer, found %c\n", c);
+  }
+  return (EvaluateIntegerResult){.magnitude = exponential_part, .c = c};
 }

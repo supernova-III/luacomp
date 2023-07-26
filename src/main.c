@@ -49,7 +49,7 @@ static Span inputFromFile(int argc, char **argv) {
 
 int main(int argc, char **argv) {
   // StringView input = inputFromFile(argc, argv);
-  Span input = STRING_VIEW("asd = 123 + 0xfep12");
+  Span input = STRING_VIEW("a = .1e3 + b");
   InitTokenizer(input.string, input.len);
 
   const Token *token = NextToken();

@@ -11,28 +11,30 @@ static inline bool isDigit(char c) {
   return c >= '0' && c <= '9';
 }
 
-static inline bool isHexadecimal(char c) {
-  return isDigit(c) || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+static inline bool isHexChar(char c) {
+  return (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
 }
 
-static inline bool isBinary(char c) {
-  return c == '0' || c == '1';
+static inline bool isHexadecimal(char c) {
+  return isDigit(c) || isHexChar(c);
 }
 
 static inline bool isKeywordCharacter(char c) {
   return isAlpha(c) || isDigit(c) || c == '_';
 }
 
-static inline int64_t charToDigit(char c) {
+static inline double charToDigit(char c) {
   return c - '0';
 }
 
-static inline int64_t hexCharToNumber(char c) {
-  // convert character to upper case
-  if (c >= 'a') {
-    c = c - ('A' - 'a');
+static inline double hexToNumber(char c) {
+  if (isHexChar(c)) {
+    if (c >= 'a') {
+      c = c - ('A' - 'a');
+    }
+    return c - 'A' + 10;
   }
-  return c - 'A' + 10;
+  return charToDigit(c);
 }
 
 //
@@ -124,3 +126,12 @@ static void advanceInputIterator();
 static char getNextCharacter();
 static char peekCharacter();
 static TokenType scanWithTable(char c);
+
+// We use 10 or 16 for base and 10 or 2 for magnitude
+typedef struct {
+  double magnitude;
+  double power_of_base;
+  char c;
+} EvaluateIntegerResult;
+static EvaluateIntegerResult scanAndEvaluateInteger(double base);
+static EvaluateIntegerResult evaluateExponent(double base);

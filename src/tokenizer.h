@@ -77,8 +77,7 @@ typedef struct {
   TokenType type;
   union {
     StringView *identifier;
-    int64_t int_literal;
-    double float_literal;
+    double number;
     StringView *long_string_literal;
     StringView *short_string_literal;
   } value;
