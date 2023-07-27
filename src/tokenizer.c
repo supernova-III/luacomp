@@ -61,6 +61,7 @@ NextToken_repeat:
 
       } else {
         iterator.current.type = c;
+        advanceInputIterator();
       }
     } break;
     case '\'':
