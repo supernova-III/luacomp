@@ -135,3 +135,4 @@ typedef struct {
 } EvaluateIntegerResult;
 static EvaluateIntegerResult scanAndEvaluateInteger(double base);
 static EvaluateIntegerResult evaluateExponent(double base);
+static char scanStringLiteral(char string_literal_start);

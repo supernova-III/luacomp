@@ -41,9 +41,31 @@ NextToken_repeat:
   }
 
   switch (c) {
-    case '"': {
+    case '[': {
+      c = getNextCharacter();
+      if (c == '[') {
+        const char *start = iterator.it;
+        while (c != ']' && c != 0) {
+          c = getNextCharacter();
+        }
+        const size_t len = iterator.it - start;
+        c = getNextCharacter();
+        if (c == ']') {
+          StringView *literal = insertString(&string_table, start, len);
+          if (!literal) {
+            exit(EXIT_FAILURE);
+          }
+          iterator.current.value.string_literal = literal;
+          iterator.current.type = TOKEN_LONG_STRING_LITERAL;
+        }
+
+      } else {
+        iterator.current.type = c;
+      }
     } break;
-    case '\'': {
+    case '\'':
+    case '"': {
+      c = scanStringLiteral(c);
     } break;
     case '-': {
       c = getNextCharacter();
@@ -119,7 +141,7 @@ NextToken_repeat:
           c = eval_res.c;
           number *= eval_res.magnitude;
         } else {
-          printf("Base 2 exponen cannot be used with non-hex numbers\n");
+          printf("Base 2 exponent cannot be used with non-hex numbers\n");
           exit(EXIT_FAILURE);
         }
       }
@@ -161,7 +183,7 @@ NextToken_repeat:
     } break;
     // clang-format off
     case '+': case '*': case '%': case '#': case '&': case '|': case '(':
-    case ')': case '{': case '}': case '[': case ']': case ';': case ',': {
+    case ')': case '{': case '}': case ']': case ';': case ',': {
       // clang-format on
       iterator.current.type = c;
       advanceInputIterator();
@@ -552,4 +574,21 @@ static EvaluateIntegerResult evaluateExponent(double base) {
     printf("Expected integer, found %c\n", c);
   }
   return (EvaluateIntegerResult){.magnitude = exponential_part, .c = c};
+}
+
+static char scanStringLiteral(char string_literal_start) {
+  const char *start = iterator.it;
+  char c = getNextCharacter();
+  while (c != string_literal_start && c != 0) {
+    c = getNextCharacter();
+  }
+  if (c == 0) {
+    printf("Unextected EOF: %s", start);
+    exit(EXIT_FAILURE);
+  }
+  const size_t len = iterator.it - start;
+  Identifier *string_literal = insertString(&string_table, start, len);
+  iterator.current.value.string_literal = string_literal;
+  iterator.current.type = TOKEN_SHORT_STRING_LITERAL;
+  return c;
 }
