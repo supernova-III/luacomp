@@ -1,4 +1,5 @@
 #include <string.h>
+#include <stdlib.h>
 #include "tokenizer.hh"
 
 #define LUACOMP_TRIVIAL_TOKEN \
@@ -257,6 +258,93 @@ LuaTokenType lookupKeyword(const char* str, size_t len) {
 }
 }  // namespace
 
+// Super-mega-default array of bytes
+struct PoolAllocator {
+  u8* memory_;
+  usize size_;
+  usize capacity_;
+
+  static PoolAllocator New(usize capacity);
+  u8* Allocate(usize size);
+};
+
+PoolAllocator PoolAllocator::New(usize capacity) {
+  PoolAllocator res = {};
+
+  auto memory = static_cast<u8*>(calloc(1, capacity));
+  if (!memory) {
+    Panic("Memory cannot be allocated anymore\n");
+  }
+  return {memory, 0, capacity};
+}
+
+u8* PoolAllocator::Allocate(usize size) {
+  if (size_ + size > capacity_) {
+    const auto new_capacity = 2 * (size + size_);
+    auto memory = static_cast<u8*>(realloc(memory_, new_capacity));
+    if (!memory) {
+      Panic("Memory cannot be reallocated anymore\n");
+    }
+    memory_ = memory;
+    capacity_ = new_capacity;
+  }
+
+  auto res = memory_ + size;
+  size_ += size;
+  return res;
+}
+
+struct StringView {
+  usize size;
+  const char* data;
+};
+
+// Represents in-memory linked list node, so that the pointer to StringNode
+// points to the memory where the entire node is stored
+struct StringNode {
+  StringNode* next = nullptr;
+  usize size = 0;
+  const char* data = nullptr;
+
+  static StringNode* New(
+      const char* string, usize string_size, PoolAllocator& allocator);
+};
+
+StringNode* StringNode::New(
+    const char* string, usize string_size, PoolAllocator& allocator) {
+  auto memory = allocator.Allocate(sizeof(StringNode) + string_size + 1);
+  if (!memory) {
+    return nullptr;
+  }
+  memcpy(
+      memory + sizeof(StringNode) - sizeof(const char*), string, string_size);
+  return reinterpret_cast<StringNode*>(memory);
+}
+
+struct StringList {
+  StringNode* head = nullptr;
+  StringNode* tail = nullptr;
+
+  static StringList New(const char* string, usize size);
+  bool AddNode(const char* string, usize size);
+};
+
+// Memory layout
+//     -------------------
+//     |                 \/
+// [ node_1->string_1  node_2->string_2 ... node_n->string_n ] - arena
+//     ^   -----------------------------------^
+//     |   |
+// [ head tail ] - stack
+//
+struct StringTable {
+  f64 max_load_;
+  usize hash_seed_;
+  usize nbuckets_;
+  usize bucketcap_;
+  StringList* list_;
+};
+
 TokenIterator TokenIterator::New(
     const char* input_name, const char* input, usize size) {
   return TokenIterator{
@@ -310,6 +398,15 @@ void TokenIterator::unexpectedCharacter() {
       input_name_ ? input_name_ : "", line_number_, current_input_pos_ + 1);
 }
 
+TokenIterator::ScanStringResult TokenIterator::scanString(CheckingFunction f) {
+  const auto start = current_input_pos_;
+  while (f(peekCharacter())) {
+    nextCharacter();
+  }
+  const auto len = current_input_pos_ - start;
+  return {.str = input_ + start, .len = len};
+}
+
 void TokenIterator::nextToken() {
 scanForNextToken_Label_Repeat:
   if (current_input_pos_ == input_size_) {
@@ -320,6 +417,30 @@ scanForNextToken_Label_Repeat:
   char c = input_[current_input_pos_];
 
   switch (c) {
+    case '.': {
+      current_token_.type = TOKEN_PERIOD;
+      c = nextCharacter();
+      if (c == '.') {
+        current_token_.type = TOKEN_2PERIOD;
+        c = nextCharacter();
+        if (c == '.') {
+          current_token_.type = TOKEN_3PERIOD;
+          ++current_input_pos_;
+        }
+      }
+      /*
+      if (isDigit(c)) {
+        current_token_.type = TOKEN_NUMBER;
+        f64 result = 0;
+
+        const auto start = current_input_pos_;
+        while (isDigit(c)) {
+          c = nextCharacter();
+        }
+        const auto len = current_input_pos_ - start;
+      }
+      */
+    } break;
     case LUACOMP_TRIVIAL_TOKEN: {
       current_token_.type = static_cast<LuaTokenType>(c);
       ++current_input_pos_;
@@ -329,14 +450,8 @@ scanForNextToken_Label_Repeat:
       ++current_input_pos_;
     } break;
     case LUACOMP_ALPHA_CHAR: {
-      auto start = current_input_pos_;
-      char c = nextCharacter();
-      while (isAlpha(c) || isDigit(c) || c == '_') {
-        c = nextCharacter();
-      }
-      const usize len = current_input_pos_ - start;
-
-      LuaTokenType token_type = lookupKeyword(input_ + start, len);
+      const auto [str, len] = scanString(isKeywordCharacter);
+      LuaTokenType token_type = lookupKeyword(str, len);
       if (token_type != TOKEN_END_OF_STREAM) {
         current_token_.type = token_type;
       } else {

@@ -1,6 +1,7 @@
 #pragma once
 #include "common.hh"
 
+// FIXME: values are repeating: 3PERIOD and DIVIDE
 enum LuaTokenType {
   TOKEN_AND,
   TOKEN_BREAK,
@@ -124,4 +125,12 @@ struct TokenIterator {
   char peekCharacter();
 
   void unexpectedCharacter();
+
+  // Generic function to deduplicate code that scans strings
+  struct ScanStringResult {
+    const char* str;
+    usize len;
+  };
+  using CheckingFunction = bool (*)(char c);
+  ScanStringResult scanString(CheckingFunction f);
 };
