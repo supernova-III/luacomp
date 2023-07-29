@@ -25,16 +25,19 @@ enum LuaTokenType {
   TOKEN_UNTIL,
   TOKEN_WHILE,
   KEYWORDS__COUNT,
-  TOKEN_INVALID,
+  TOKEN_DIVIDE = '/',         // ok
+  TOKEN_BNOT = '~',           // ok
+  TOKEN_LESS = '<',           // ok
+  TOKEN_BIGGER = '>',         // ok
+  TOKEN_ASSIGN = '=',         // ok
+  TOKEN_COLON = ':',          // ok
   TOKEN_PLUS = '+',           // ok
   TOKEN_MINUS,                // ok
   TOKEN_ASTERISK = '*',       // ok
-  TOKEN_DIVIDE = '/',         // ok
   TOKEN_MOD = '%',            // ok
   TOKEN_BXOR = '^',           // ok
   TOKEN_DASH = '#',           // ok
   TOKEN_AT = '&',             // ok
-  TOKEN_BNOT = '~',           // ok
   TOKEN_BOR = '|',            // ok
   TOKEN_BLEFT,                // ok
   TOKEN_BRIGHT,               // ok
@@ -43,9 +46,6 @@ enum LuaTokenType {
   TOKEN_BNOT_ASSIGN,          // ok
   TOKEN_LESS_EQUAL,           // ok
   TOKEN_BIGGER_EQUAL,         // ok
-  TOKEN_LESS = '<',           // ok
-  TOKEN_BIGGER = '>',         // ok
-  TOKEN_ASSIGN = '=',         // ok
   TOKEN_LEFT_PAREN = '(',     // ok
   TOKEN_RIGHT_PAREN = ')',    // ok
   TOKEN_LEFT_BRACE = '{',     // ok
@@ -54,7 +54,6 @@ enum LuaTokenType {
   TOKEN_RIGHT_BRACKET = ']',  // ok
   TOKEN_COLON_COLON,          // ok
   TOKEN_SEMICOLON = ';',      // ok
-  TOKEN_COLON = ':',          // ok
   TOKEN_COMMA = ',',          // ok
   TOKEN_PERIOD,               // ok
   TOKEN_2PERIOD,              // ok
@@ -70,7 +69,7 @@ enum LuaTokenType {
 // line number, if applicable. But it's rather not to be stored here, because
 // this data is needed only when some error comes in.
 struct Token {
-  LuaTokenType type = TOKEN_INVALID;
+  LuaTokenType type = TOKEN_END_OF_STREAM;
   union {
     const char* identifier;
     const char* string_literal;
@@ -78,16 +77,29 @@ struct Token {
   } value;
 };
 
+// Iterates over provided string, scanning tokens. It doesn't store tokens, it
+// can only provide the latest scanned token.
 struct TokenIterator {
+  // Input stream
   const char* input_ = nullptr;
+  const char* input_name_ = nullptr;
+  // Size of an input stream
   usize input_size_ = 0;
-  usize input_pos_ = 0;
+  // Current line number in a source file
+  usize line_number_ = 1;
+  // Position of a character being recognized
+  usize current_input_pos_ = 0;
+  // Last scanned token
   Token current_token_ = {};
 
   // Should be used to create tokenizer for an input string.
   static TokenIterator New(const char* input);
+  static TokenIterator New(
+      const char* input_name, const char* input, usize size);
 
-  static TokenIterator New(const char* input, usize size);
+  // When the input string exhausted, this function can be used to provide
+  // another string to tokenize
+  void UpdateInput(const char* new_input);
 
   // Scan for the next token
   TokenIterator& operator++();
@@ -100,6 +112,17 @@ struct TokenIterator {
   operator bool() const;
 
  private:
-  // The actual funcation that does tokenization
-  void scanForNextToken();
+  // The actual function that does tokenization
+  void nextToken();
+
+  // Do table-driven scan for certain characters
+  void scanWithTable();
+
+  // Advance input iterator and get next character
+  char nextCharacter();
+
+  // Get current character
+  char peekCharacter();
+
+  void unexpectedCharacter();
 };
