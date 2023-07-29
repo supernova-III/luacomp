@@ -93,7 +93,6 @@ struct TokenIterator {
   Token current_token_ = {};
 
   // Should be used to create tokenizer for an input string.
-  static TokenIterator New(const char* input);
   static TokenIterator New(
       const char* input_name, const char* input, usize size);
 
