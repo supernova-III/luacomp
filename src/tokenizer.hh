@@ -1,5 +1,7 @@
 #pragma once
 #include "common.hh"
+#include <unordered_set>
+#include <string>
 
 // FIXME: values are repeating: 3PERIOD and DIVIDE
 enum LuaTokenType {
@@ -93,9 +95,10 @@ struct TokenIterator {
   // Last scanned token
   Token current_token_ = {};
 
+  std::unordered_set<std::string> string_table_;
+
   // Should be used to create tokenizer for an input string.
-  static TokenIterator New(
-      const char* input_name, const char* input, usize size);
+  TokenIterator(const char* input_name, const char* input, usize size);
 
   // When the input string exhausted, this function can be used to provide
   // another string to tokenize
