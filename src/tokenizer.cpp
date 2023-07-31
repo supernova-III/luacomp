@@ -297,18 +297,6 @@ void TokenIterator::nextToken() {
             ++current_input_pos_;
           }
         }
-        /*
-        if (isDigit(c)) {
-          current_token_.type = TOKEN_NUMBER;
-          f64 result = 0;
-
-          const auto start = current_input_pos_;
-          while (isDigit(c)) {
-            c = nextCharacter();
-          }
-          const auto len = current_input_pos_ - start;
-        }
-        */
         return;
       }
       case LUACOMP_SPECIAL_CHAR: {
