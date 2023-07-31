@@ -1,16 +1,14 @@
+#include "tokenizer.hh"
 #include <string.h>
 #include <stdlib.h>
-#include "tokenizer.hh"
 #include <format>
 
 // clang-format off
-#define LUACOMP_TRIVIAL_TOKEN \
+#define LUACOMP_SPECIAL_CHAR\
   '+' : case '*': case '%': case '#': case '&': case '|': \
   case '(': case ')': case '{': case '}': case ']': \
-  case ';': case ','
-
-#define LUACOMP_COMPOSITE_TOKEN_START \
-  '/' : case '~': case '<': case '>': \
+  case ';': case ',':\
+  case '/' : case '~': case '<': case '>': \
   case '=': case ':'
 
 #define LUACOMP_ALPHA_CHAR 'a' : case 'b': case 'c': case 'd': case 'e': case 'f':\
@@ -91,7 +89,7 @@ LuaTokenType lookupKeyword(const char* str, size_t len) {
 }  // namespace
 
 TokenIterator::TokenIterator(
-    const char* input_name, const char* input, usize size)
+    const char* input_name, const char* input, size_t size)
     : input_(input), input_name_(input_name), input_size_(size) {}
 
 TokenIterator::operator bool() const {
@@ -169,17 +167,85 @@ void TokenIterator::scanWithTable() {
         .pairs = {
           {.c = ':', .t = TOKEN_COLON_COLON}
         }
-      }
+      }, 
+      {
+        .main_type = TOKEN_PLUS,
+      },
+      {
+        .main_type = TOKEN_MINUS,
+        .size = 1,
+        .pairs = {
+          { .c = '-', .t = TOKEN_COMMENT }
+        }
+      },
+      {
+        .main_type = TOKEN_ASTERISK,
+      },
+      {
+        .main_type = TOKEN_MOD
+      },
+      {
+        .main_type = TOKEN_BXOR
+      },
+      {
+        .main_type = TOKEN_DASH
+      },
+      {
+        .main_type = TOKEN_AT
+      },
+      {
+        .main_type = TOKEN_BOR
+      },
+      {
+        .main_type = TOKEN_LEFT_PAREN
+      },
+      {
+        .main_type = TOKEN_RIGHT_PAREN
+      },
+      {
+        .main_type = TOKEN_LEFT_BRACE
+      },
+      {
+        .main_type = TOKEN_RIGHT_BRACE
+      },
+      {
+        .main_type = TOKEN_LEFT_BRACKET
+      },
+      {
+        .main_type = TOKEN_RIGHT_BRACKET
+      },
+      {
+        .main_type = TOKEN_SEMICOLON
+      },
+      {
+        .main_type = TOKEN_COMMA
+      },
   };
   // clang-format on
-  size_t table_index = 0;
+
+  size_t table_index = TOKEN_DIVIDE;
   switch (peekCharacter()) {
-    case '/': table_index = 0; break;
-    case '~': table_index = 1; break;
-    case '<': table_index = 2; break;
-    case '>': table_index = 3; break;
-    case '=': table_index = 4; break;
-    case ';': table_index = 5; break;
+    case '~': table_index = TOKEN_BNOT; break;
+    case '<': table_index = TOKEN_LESS; break;
+    case '>': table_index = TOKEN_BIGGER; break;
+    case '=': table_index = TOKEN_ASSIGN; break;
+    case ':': table_index = TOKEN_COLON; break;
+    case '+': table_index = TOKEN_PLUS; break;
+    case '-': table_index = TOKEN_MINUS; break;
+    case '*': table_index = TOKEN_ASTERISK; break;
+    case '%': table_index = TOKEN_MOD; break;
+    case '^': table_index = TOKEN_BXOR; break;
+    case '#': table_index = TOKEN_DASH; break;
+    case '&': table_index = TOKEN_AT; break;
+    case '|': table_index = TOKEN_BOR; break;
+    case '(': table_index = TOKEN_LEFT_PAREN; break;
+    case ')': table_index = TOKEN_RIGHT_PAREN; break;
+    case '{': table_index = TOKEN_LEFT_BRACE; break;
+    case '}': table_index = TOKEN_RIGHT_BRACE; break;
+    case '[': table_index = TOKEN_LEFT_BRACKET; break;
+    case ']': table_index = TOKEN_RIGHT_BRACKET; break;
+    case ';': table_index = TOKEN_SEMICOLON; break;
+    case ',': table_index = TOKEN_COMMA; break;
   }
 
   const auto& entry = scanner_table[table_index];
@@ -187,10 +253,11 @@ void TokenIterator::scanWithTable() {
   for (size_t i = 0; i < entry.size; ++i) {
     if (c == entry.pairs[i].c) {
       current_token_.type = entry.pairs[i].t;
+      ++current_input_pos_;
       return;
     }
   }
-  current_token_.type = static_cast<LuaTokenType>(c);
+  current_token_.type = static_cast<LuaTokenType>(entry.main_type);
 }
 
 void TokenIterator::unexpectedCharacter() {
@@ -243,13 +310,8 @@ scanForNextToken_Label_Repeat:
       }
       */
     } break;
-    case LUACOMP_TRIVIAL_TOKEN: {
-      current_token_.type = static_cast<LuaTokenType>(c);
-      ++current_input_pos_;
-    } break;
-    case LUACOMP_COMPOSITE_TOKEN_START: {
+    case LUACOMP_SPECIAL_CHAR: {
       scanWithTable();
-      ++current_input_pos_;
     } break;
     case LUACOMP_ALPHA_CHAR: {
       const auto [str, len] = scanString(isKeywordCharacter);

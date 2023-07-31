@@ -1,10 +1,31 @@
 #pragma once
-#include "common.hh"
 #include <unordered_set>
 #include <string>
 
-// FIXME: values are repeating: 3PERIOD and DIVIDE
-enum LuaTokenType {
+enum LuaTokenType : uint32_t {
+  TOKEN_DIVIDE,         // ok
+  TOKEN_BNOT,           // ok
+  TOKEN_LESS,           // ok
+  TOKEN_BIGGER,         // ok
+  TOKEN_ASSIGN,         // ok
+  TOKEN_COLON,          // ok
+  TOKEN_PLUS,           // ok
+  TOKEN_MINUS,          // ok
+  TOKEN_ASTERISK,       // ok
+  TOKEN_MOD,            // ok
+  TOKEN_BXOR,           // ok
+  TOKEN_DASH,           // ok
+  TOKEN_AT,             // ok
+  TOKEN_BOR,            // ok
+  TOKEN_LEFT_PAREN,     // ok
+  TOKEN_RIGHT_PAREN,    // ok
+  TOKEN_LEFT_BRACE,     // ok
+  TOKEN_RIGHT_BRACE,    // ok
+  TOKEN_LEFT_BRACKET,   // ok
+  TOKEN_RIGHT_BRACKET,  // ok
+  TOKEN_SEMICOLON,      // ok
+  TOKEN_COMMA,          // ok
+                        //
   TOKEN_AND,
   TOKEN_BREAK,
   TOKEN_DO,
@@ -27,46 +48,26 @@ enum LuaTokenType {
   TOKEN_TRUE,
   TOKEN_UNTIL,
   TOKEN_WHILE,
-  KEYWORDS__COUNT,
-  TOKEN_DIVIDE = '/',         // ok
-  TOKEN_BNOT = '~',           // ok
-  TOKEN_LESS = '<',           // ok
-  TOKEN_BIGGER = '>',         // ok
-  TOKEN_ASSIGN = '=',         // ok
-  TOKEN_COLON = ':',          // ok
-  TOKEN_PLUS = '+',           // ok
-  TOKEN_MINUS,                // ok
-  TOKEN_ASTERISK = '*',       // ok
-  TOKEN_MOD = '%',            // ok
-  TOKEN_BXOR = '^',           // ok
-  TOKEN_DASH = '#',           // ok
-  TOKEN_AT = '&',             // ok
-  TOKEN_BOR = '|',            // ok
-  TOKEN_BLEFT,                // ok
-  TOKEN_BRIGHT,               // ok
-  TOKEN_DIV,                  // ok
-  TOKEN_EQUALS,               // ok
-  TOKEN_BNOT_ASSIGN,          // ok
-  TOKEN_LESS_EQUAL,           // ok
-  TOKEN_BIGGER_EQUAL,         // ok
-  TOKEN_LEFT_PAREN = '(',     // ok
-  TOKEN_RIGHT_PAREN = ')',    // ok
-  TOKEN_LEFT_BRACE = '{',     // ok
-  TOKEN_RIGHT_BRACE = '}',    // ok
-  TOKEN_LEFT_BRACKET = '[',   // ok
-  TOKEN_RIGHT_BRACKET = ']',  // ok
-  TOKEN_COLON_COLON,          // ok
-  TOKEN_SEMICOLON = ';',      // ok
-  TOKEN_COMMA = ',',          // ok
-  TOKEN_PERIOD,               // ok
-  TOKEN_2PERIOD,              // ok
-  TOKEN_3PERIOD,              // ok
+  TOKEN_COLON_COLON,   // ok
+  TOKEN_BLEFT,         // ok
+  TOKEN_BRIGHT,        // ok
+  TOKEN_DIV,           // ok
+  TOKEN_EQUALS,        // ok
+  TOKEN_BNOT_ASSIGN,   // ok
+  TOKEN_LESS_EQUAL,    // ok
+  TOKEN_BIGGER_EQUAL,  // ok
+  TOKEN_PERIOD,        // ok
+  TOKEN_2PERIOD,       // ok
+  TOKEN_3PERIOD,       // ok
+  TOKEN_COMMENT,       // ok
   TOKEN_LONG_STRING_LITERAL,
   TOKEN_SHORT_STRING_LITERAL,
   TOKEN_NUMBER,
   TOKEN_IDENTIFIER,
   TOKEN_END_OF_STREAM  // ok
 };
+
+static_assert(TOKEN_3PERIOD != TOKEN_DIVIDE);
 
 // It would be nice to have a token position inside the line of code and the
 // line number, if applicable. But it's rather not to be stored here, because
@@ -76,7 +77,7 @@ struct Token {
   union {
     const char* identifier;
     const char* string_literal;
-    f64 number;
+    double number;
   } value;
 };
 
@@ -87,18 +88,18 @@ struct TokenIterator {
   const char* input_ = nullptr;
   const char* input_name_ = nullptr;
   // Size of an input stream
-  usize input_size_ = 0;
+  size_t input_size_ = 0;
   // Current line number in a source file
-  usize line_number_ = 1;
+  size_t line_number_ = 1;
   // Position of a character being recognized
-  usize current_input_pos_ = 0;
+  size_t current_input_pos_ = 0;
   // Last scanned token
   Token current_token_ = {};
 
   std::unordered_set<std::string> string_table_;
 
   // Should be used to create tokenizer for an input string.
-  TokenIterator(const char* input_name, const char* input, usize size);
+  TokenIterator(const char* input_name, const char* input, size_t size);
 
   // When the input string exhausted, this function can be used to provide
   // another string to tokenize
@@ -132,7 +133,7 @@ struct TokenIterator {
   // Generic function to deduplicate code that scans strings
   struct ScanStringResult {
     const char* str;
-    usize len;
+    size_t len;
   };
   using CheckingFunction = bool (*)(char c);
   ScanStringResult scanString(CheckingFunction f);
