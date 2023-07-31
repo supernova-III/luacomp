@@ -277,66 +277,69 @@ TokenIterator::ScanStringResult TokenIterator::scanString(CheckingFunction f) {
 }
 
 void TokenIterator::nextToken() {
-scanForNextToken_Label_Repeat:
-  if (current_input_pos_ == input_size_) {
-    current_token_.type = TOKEN_END_OF_STREAM;
-    return;
-  }
+  while (true) {
+    if (current_input_pos_ == input_size_) {
+      current_token_.type = TOKEN_END_OF_STREAM;
+      return;
+    }
 
-  char c = input_[current_input_pos_];
+    char c = input_[current_input_pos_];
 
-  switch (c) {
-    case '.': {
-      current_token_.type = TOKEN_PERIOD;
-      c = nextCharacter();
-      if (c == '.') {
-        current_token_.type = TOKEN_2PERIOD;
+    switch (c) {
+      case '.': {
+        current_token_.type = TOKEN_PERIOD;
         c = nextCharacter();
         if (c == '.') {
-          current_token_.type = TOKEN_3PERIOD;
-          ++current_input_pos_;
-        }
-      }
-      /*
-      if (isDigit(c)) {
-        current_token_.type = TOKEN_NUMBER;
-        f64 result = 0;
-
-        const auto start = current_input_pos_;
-        while (isDigit(c)) {
+          current_token_.type = TOKEN_2PERIOD;
           c = nextCharacter();
+          if (c == '.') {
+            current_token_.type = TOKEN_3PERIOD;
+            ++current_input_pos_;
+          }
         }
-        const auto len = current_input_pos_ - start;
+        /*
+        if (isDigit(c)) {
+          current_token_.type = TOKEN_NUMBER;
+          f64 result = 0;
+
+          const auto start = current_input_pos_;
+          while (isDigit(c)) {
+            c = nextCharacter();
+          }
+          const auto len = current_input_pos_ - start;
+        }
+        */
+        return;
       }
-      */
-    } break;
-    case LUACOMP_SPECIAL_CHAR: {
-      scanWithTable();
-    } break;
-    case LUACOMP_ALPHA_CHAR: {
-      const auto [str, len] = scanString(isKeywordCharacter);
-      LuaTokenType token_type = lookupKeyword(str, len);
-      if (token_type != TOKEN_END_OF_STREAM) {
-        current_token_.type = token_type;
-      } else {
-        string_table_.insert(std::string(str, len));
-        current_token_.type = TOKEN_IDENTIFIER;
+      case LUACOMP_SPECIAL_CHAR: {
+        scanWithTable();
+        return;
       }
-    } break;
-    case '\n': {
-      ++line_number_;
-      ++current_input_pos_;
-    } break;
-    case ' ':
-    case '\r':
-    case '\t': {
-      while (input_[++current_input_pos_] == c &&
-             current_input_pos_ != input_size_) {
+      case LUACOMP_ALPHA_CHAR: {
+        const auto [str, len] = scanString(isKeywordCharacter);
+        LuaTokenType token_type = lookupKeyword(str, len);
+        if (token_type != TOKEN_END_OF_STREAM) {
+          current_token_.type = token_type;
+        } else {
+          string_table_.insert(std::string(str, len));
+          current_token_.type = TOKEN_IDENTIFIER;
+        }
+        return;
       }
-      goto scanForNextToken_Label_Repeat;
-    } break;
-    default: {
-      unexpectedCharacter();
-    } break;
+      case '\n': {
+        ++line_number_;
+        ++current_input_pos_;
+      } break;
+      case ' ':
+      case '\r':
+      case '\t': {
+        while (input_[++current_input_pos_] == c &&
+               current_input_pos_ != input_size_) {
+        }
+      } break;
+      default: {
+        unexpectedCharacter();
+      }
+    }
   }
 }
