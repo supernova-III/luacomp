@@ -119,7 +119,7 @@ struct TokenIterator {
   void nextToken();
 
   // Do table-driven scan for certain characters
-  void scanWithTable();
+  void recognizeTokensWithTable();
 
   // Advance input iterator and get next character
   char nextCharacter();

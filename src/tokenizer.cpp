@@ -1,6 +1,18 @@
 #include "tokenizer.hh"
 #include "lib.hh"
 
+#define VAR(str, tok) \
+  { str, sizeof(str) - 1, tok }
+#define KWTABLE_ENTRY3(c, v0, t0, v1, t1, v2, t2) \
+  trie_[idx(#@ c)] = {                            \
+      .size = 3, .variants = {VAR(v0, t0), VAR(v1, t1), VAR(v2, t2)}}
+
+#define KWTABLE_ENTRY2(c, v0, t0, v1, t1) \
+  trie_[idx(#@ c)] = {.size = 2, .variants = {VAR(v0, t0), VAR(v1, t1)}}
+
+#define KWTABLE_ENTRY(c, v, t) \
+  trie_[idx(#@ c)] = {.size = 1, .variants = {VAR(v, t)}}
+
 // clang-format off
 #define LUACOMP_SPECIAL_CHAR\
   '+' : case '*': case '%': case '#': case '&': case '|': \
@@ -56,7 +68,11 @@ inline double hexToNumber(char c) {
   return charToDigit(c);
 }
 
-class KeywordsTrie {
+inline constexpr size_t idx(char c) {
+  return c - 'a';
+}
+
+class KeywordsTable {
   struct TableEntry {
     struct Tok {
       const char* str;
@@ -66,80 +82,39 @@ class KeywordsTrie {
     size_t size = 0;
     Tok variants[3] = {};
   };
-  struct TokStr {
-    const char* str;
-    size_t len;
-  };
 
-  TableEntry trie_['z' - 'a'] = {};
+  TableEntry trie_[idx('z') + 1] = {};
 
  public:
-  consteval KeywordsTrie() {
-#define VAR(str, tok) \
-  { str, sizeof(str) - 1, tok }
-#define idx(c) c - 'a'
-    // clang-format off
-    trie_[idx('a')] = {.size = 1, .variants = {VAR("and", TOKEN_AND)}};
-    trie_[idx('b')] = {.size = 1, .variants = {VAR("break", TOKEN_BREAK)}};
-    trie_[idx('d')] = {.size = 1, .variants = {VAR("do", TOKEN_DO)}};
-    trie_[idx('e')] = {
-      .size = 3,
-      .variants = {
-        VAR("else", TOKEN_ELSE), 
-        VAR("elseif", TOKEN_ELSEIF),
-        VAR("end", TOKEN_END)
-      }
-    };
-    trie_[idx('f')] = {
-      .size = 3,
-      .variants = {
-        VAR("false", TOKEN_FALSE), 
-        VAR("for", TOKEN_FOR),
-        VAR("function", TOKEN_FUNCTION)
-      }
-    };
-    trie_[idx('g')] = {.size = 1, .variants = {VAR("goto", TOKEN_GOTO)}};
-    trie_[idx('i')] = {
-      .size = 2, 
-      .variants = {
-        VAR("if", TOKEN_IF), 
-        VAR("in", TOKEN_IN)
-      }
-    };
-    trie_[idx('l')] = {.size = 1, .variants = {VAR("local", TOKEN_LOCAL)}};
-    trie_[idx('n')] = {
-      .size = 2, 
-      .variants = {
-        VAR("nil", TOKEN_NIL), 
-        VAR("not", TOKEN_NOT)
-      }
-    };
-    trie_[idx('o')] = {.size = 1, .variants = {VAR("or", TOKEN_OR)}};
-    trie_[idx('r')] = {
-      .size = 2,
-      .variants = {
-        VAR("repeat", TOKEN_REPEAT), 
-        VAR("return", TOKEN_RETURN)
-      }
-    };
-    trie_[idx('t')] = {
-      .size = 2,
-      .variants = {
-        VAR("then", TOKEN_THEN), 
-        VAR("true", TOKEN_TRUE)
-      }
-    };
-    trie_[idx('u')] = {.size = 1, .variants = {VAR("until", TOKEN_UNTIL)}};
-    trie_[idx('w')] = {.size = 1, .variants = {VAR("while", TOKEN_WHILE)}};
-    // clang-format on
-#undef VAR
+  consteval KeywordsTable() {
+    KWTABLE_ENTRY(a, "and", TOKEN_AND);
+    KWTABLE_ENTRY(b, "break", TOKEN_BREAK);
+    KWTABLE_ENTRY(d, "do", TOKEN_DO);
+    KWTABLE_ENTRY3(
+        e, "else", TOKEN_ELSE, "elseif", TOKEN_ELSEIF, "end", TOKEN_END);
+    KWTABLE_ENTRY3(
+        f, "false", TOKEN_FALSE, "for", TOKEN_FOR, "function", TOKEN_FUNCTION);
+    KWTABLE_ENTRY(g, "goto", TOKEN_GOTO);
+    KWTABLE_ENTRY2(i, "if", TOKEN_IF, "in", TOKEN_IN);
+    KWTABLE_ENTRY(l, "local", TOKEN_LOCAL);
+    KWTABLE_ENTRY2(n, "nil", TOKEN_NIL, "not", TOKEN_NOT);
+    KWTABLE_ENTRY(o, "or", TOKEN_OR);
+    KWTABLE_ENTRY2(r, "repeat", TOKEN_REPEAT, "return", TOKEN_RETURN);
+    KWTABLE_ENTRY2(t, "then", TOKEN_THEN, "true", TOKEN_TRUE);
+    KWTABLE_ENTRY(u, "until", TOKEN_UNTIL);
+    KWTABLE_ENTRY(w, "while", TOKEN_WHILE);
   }
 
-  const auto& operator[](char c) const { return trie_[c - 'a']; }
+  const auto& operator[](char c) const { return trie_[idx(c)]; }
 };
 
-LuaTokenType lookupKeyword(const char* str, size_t len) {
-  static constinit auto trie = KeywordsTrie();
+#undef VAR
+#undef KWTABLE_ENTRY
+#undef KWTABLE_ENTRY2
+#undef KWTABLE_ENTRY3
+
+LuaTokenType recognizeKeywordsWithTable(const char* str, size_t len) {
+  static constinit auto trie = KeywordsTable();
   const auto& entry = trie[*str];
   for (size_t i = 0; i < entry.size; ++i) {
     const auto& [tok_str, tok_len, tok] = entry.variants[i];
@@ -147,7 +122,7 @@ LuaTokenType lookupKeyword(const char* str, size_t len) {
       return tok;
     }
   }
-  return TOKEN_END_OF_STREAM;
+  return TOKEN_IDENTIFIER;
 }
 }  // namespace
 
@@ -175,7 +150,7 @@ char TokenIterator::peekCharacter() {
   return input_[current_input_pos_];
 }
 
-void TokenIterator::scanWithTable() {
+void TokenIterator::recognizeTokensWithTable() {
   struct CharTokenPair {
     char c;
     LuaTokenType t;
@@ -361,17 +336,15 @@ void TokenIterator::nextToken() {
         return;
       }
       case LUACOMP_SPECIAL_CHAR: {
-        scanWithTable();
+        recognizeTokensWithTable();
         return;
       }
       case LUACOMP_ALPHA_CHAR: {
         const auto [str, len] = scanString(isKeywordCharacter);
-        LuaTokenType token_type = lookupKeyword(str, len);
-        if (token_type != TOKEN_END_OF_STREAM) {
-          current_token_.type = token_type;
-        } else {
+        LuaTokenType token_type = recognizeKeywordsWithTable(str, len);
+        current_token_.type = token_type;
+        if (token_type == TOKEN_IDENTIFIER) {
           string_table_.insert(std::string(str, len));
-          current_token_.type = TOKEN_IDENTIFIER;
         }
         return;
       }
