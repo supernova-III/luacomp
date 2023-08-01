@@ -1,29 +1,8 @@
 #include "tokenizer.cpp"
-#include <windows.h>
-#include <system_error>
-#include <string_view>
-#include <format>
-#include <cstdio>
 #include <fstream>
-#include <iostream>
-#include <stdexcept>
-#include <expected>
 #include <iterator>
 #include <vector>
 #include <stdlib.h>
-
-// Exception that shows up OS error message.
-class SystemError final : public std::runtime_error {
- public:
-  SystemError(const std::string& message)
-      : std::runtime_error(std::format("{}: {}", message,
-            std::error_code(::GetLastError(), std::system_category())
-                .message())) {}
-};
-
-void What(const std::runtime_error& e) {
-  std::printf("%s\n", e.what());
-}
 
 // Allocator that allocates memory from buffers that connected via linked
 // list, to avoid expensive reallocation when another buffer is full. This
@@ -65,12 +44,12 @@ class PoolAllocator {
 
 int main(int argc, char* argv[]) try {
   if (argc != 2) {
-    throw std::runtime_error(std::format("Usage: {} <source_file>", argv[0]));
+    throw RuntimeError("Usage: %s <source_file>", argv[0]);
   }
 
   auto file = std::ifstream(argv[1], std::ios::in);
   if (!file) {
-    throw SystemError(std::format("Unable to create file {}:", argv[1]));
+    throw SystemError("Unable to create file %s", argv[1]);
   }
   const auto data = std::vector<char>(std::istreambuf_iterator<char>(file), {});
 
@@ -79,10 +58,8 @@ int main(int argc, char* argv[]) try {
     auto current = *iter;
   }
   return 0;
-} catch (const SystemError& e) {
-  What(e);
-} catch (const std::runtime_error& e) {
-  What(e);
+} catch (const RuntimeError& e) {
+  e.PrintToStdOut();
 }
 
 PoolAllocator::PoolAllocator(size_t size)
@@ -107,8 +84,8 @@ uint8_t* PoolAllocator::Allocate(size_t size) {
 
 void PoolAllocator::allocatePool(size_t capacity) {
   if (capacity > MaxPoolCapacity()) {
-    throw std::runtime_error(std::format(
-        "Memory pool size cannot be biger than {} bytes.", MaxPoolCapacity()));
+    throw RuntimeError(
+        "Memory pool size cannot be bigger than %llu bytes", MaxPoolCapacity());
   }
   if (n_pools_ == 4) {
     throw std::runtime_error("Memory pools number limit exceeded");
@@ -134,7 +111,7 @@ void PoolAllocator::reallocateCurrentPool(size_t size_hint) {
   auto header =
       reinterpret_cast<PoolHeader*>(realloc(current_pool_, new_capacity));
   if (!header) {
-    throw std::runtime_error("Not enough memory to allocate memory pool");
+    throw RuntimeError("Not enough memory to allocate memory pool");
   }
   header->capacity = new_capacity;
 }

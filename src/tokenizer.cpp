@@ -1,7 +1,5 @@
 #include "tokenizer.hh"
-#include <string.h>
-#include <stdlib.h>
-#include <format>
+#include "lib.hh"
 
 // clang-format off
 #define LUACOMP_SPECIAL_CHAR\
@@ -261,10 +259,8 @@ void TokenIterator::scanWithTable() {
 }
 
 void TokenIterator::unexpectedCharacter() {
-  const auto message =
-      std::format("Unexpected token '{}' at {}:{}:{}", peekCharacter(),
-          input_name_ ? input_name_ : "", line_number_, current_input_pos_ + 1);
-  throw std::runtime_error(message);
+  throw RuntimeError("Unexpected token '%c' at %llu:%llu:%llu", peekCharacter(),
+      input_name_ ? input_name_ : "", line_number_, current_input_pos_ + 1);
 }
 
 TokenIterator::ScanStringResult TokenIterator::scanString(CheckingFunction f) {

@@ -7,6 +7,8 @@ set(CMAKE_C_STANDARD 23)
 
 add_executable(${PROJECT_NAME} 
   src/main.cpp
+  src/lib.hh
+  src/tokenizer.hh
 )
 set_target_properties(${PROJECT_NAME} PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin)
