@@ -25,7 +25,6 @@ enum LuaTokenType : uint32_t {
   TOKEN_RIGHT_BRACKET,  // ok
   TOKEN_SEMICOLON,      // ok
   TOKEN_COMMA,          // ok
-                        //
   TOKEN_AND,
   TOKEN_BREAK,
   TOKEN_DO,

@@ -16,6 +16,8 @@ class RuntimeError {
  protected:
   char what_[256] = {};
 
+  RuntimeError() = default;
+
  public:
   RuntimeError(const char* format, ...) { FORMAT_MESSAGE(format, what_, _); }
 

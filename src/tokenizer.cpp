@@ -56,30 +56,95 @@ inline double hexToNumber(char c) {
   return charToDigit(c);
 }
 
-LuaTokenType lookupKeyword(const char* str, size_t len) {
-  struct KeywordsTableEntry {
-    std::string_view string;
-    LuaTokenType token_type;
+class KeywordsTrie {
+  struct TableEntry {
+    struct Tok {
+      const char* str;
+      size_t len;
+      LuaTokenType token;
+    };
+    size_t size = 0;
+    Tok variants[3] = {};
+  };
+  struct TokStr {
+    const char* str;
+    size_t len;
   };
 
-  // clang-format off
-  static constexpr KeywordsTableEntry kw_table[] = {
-    {"and", TOKEN_AND}, {"break", TOKEN_BREAK}, 
-    {"do", TOKEN_DO}, {"else", TOKEN_ELSE},
-    {"elseif", TOKEN_ELSEIF}, {"end", TOKEN_END}, 
-    {"false", TOKEN_FALSE}, {"for", TOKEN_FOR}, 
-    {"function", TOKEN_FUNCTION}, {"goto", TOKEN_GOTO},
-    {"if", TOKEN_IF}, {"in", TOKEN_IN}, 
-    {"local", TOKEN_LOCAL},{"nil", TOKEN_NIL}, 
-    {"not", TOKEN_NOT}, {"or", TOKEN_OR},
-    {"repeat", TOKEN_REPEAT}, {"return", TOKEN_RETURN}, 
-    {"then", TOKEN_THEN}, {"true", TOKEN_TRUE}, 
-    {"until", TOKEN_UNTIL}, {"while", TOKEN_WHILE}
-  };
-  // clang-format on
-  for (const auto& [s, t] : kw_table) {
-    if (s == std::string_view(str, len)) {
-      return t;
+  TableEntry trie_['z' - 'a'] = {};
+
+ public:
+  consteval KeywordsTrie() {
+#define VAR(str, tok) \
+  { str, sizeof(str) - 1, tok }
+#define idx(c) c - 'a'
+    // clang-format off
+    trie_[idx('a')] = {.size = 1, .variants = {VAR("and", TOKEN_AND)}};
+    trie_[idx('b')] = {.size = 1, .variants = {VAR("break", TOKEN_BREAK)}};
+    trie_[idx('d')] = {.size = 1, .variants = {VAR("do", TOKEN_DO)}};
+    trie_[idx('e')] = {
+      .size = 3,
+      .variants = {
+        VAR("else", TOKEN_ELSE), 
+        VAR("elseif", TOKEN_ELSEIF),
+        VAR("end", TOKEN_END)
+      }
+    };
+    trie_[idx('f')] = {
+      .size = 3,
+      .variants = {
+        VAR("false", TOKEN_FALSE), 
+        VAR("for", TOKEN_FOR),
+        VAR("function", TOKEN_FUNCTION)
+      }
+    };
+    trie_[idx('g')] = {.size = 1, .variants = {VAR("goto", TOKEN_GOTO)}};
+    trie_[idx('i')] = {
+      .size = 2, 
+      .variants = {
+        VAR("if", TOKEN_IF), 
+        VAR("in", TOKEN_IN)
+      }
+    };
+    trie_[idx('l')] = {.size = 1, .variants = {VAR("local", TOKEN_LOCAL)}};
+    trie_[idx('n')] = {
+      .size = 2, 
+      .variants = {
+        VAR("nil", TOKEN_NIL), 
+        VAR("not", TOKEN_NOT)
+      }
+    };
+    trie_[idx('o')] = {.size = 1, .variants = {VAR("or", TOKEN_OR)}};
+    trie_[idx('r')] = {
+      .size = 2,
+      .variants = {
+        VAR("repeat", TOKEN_REPEAT), 
+        VAR("return", TOKEN_RETURN)
+      }
+    };
+    trie_[idx('t')] = {
+      .size = 2,
+      .variants = {
+        VAR("then", TOKEN_THEN), 
+        VAR("true", TOKEN_TRUE)
+      }
+    };
+    trie_[idx('u')] = {.size = 1, .variants = {VAR("until", TOKEN_UNTIL)}};
+    trie_[idx('w')] = {.size = 1, .variants = {VAR("while", TOKEN_WHILE)}};
+    // clang-format on
+#undef VAR
+  }
+
+  const auto& operator[](char c) const { return trie_[c - 'a']; }
+};
+
+LuaTokenType lookupKeyword(const char* str, size_t len) {
+  static constinit auto trie = KeywordsTrie();
+  const auto& entry = trie[*str];
+  for (size_t i = 0; i < entry.size; ++i) {
+    const auto& [tok_str, tok_len, tok] = entry.variants[i];
+    if (tok_len == len && !strncmp(tok_str, str, len)) {
+      return tok;
     }
   }
   return TOKEN_END_OF_STREAM;
