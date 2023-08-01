@@ -17,7 +17,6 @@ class RuntimeError {
   char what_[256] = {};
 
  public:
-  RuntimeError() = default;
   RuntimeError(const char* format, ...) { FORMAT_MESSAGE(format, what_, _); }
 
   const char* What() const { return what_; }
