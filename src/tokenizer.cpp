@@ -229,7 +229,7 @@ void TokenIterator::recognizeTokensWithTable() {
 }
 
 void TokenIterator::unexpectedCharacter() {
-  throw RuntimeError("Unexpected token '%c' at %llu:%llu:%llu", peekCharacter(),
+  throw RuntimeError("Unexpected token '%c' at %s:%llu:%llu", peekCharacter(),
       input_name_ ? input_name_ : "", line_number_, current_input_pos_ + 1);
 }
 
