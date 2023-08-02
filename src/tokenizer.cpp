@@ -160,106 +160,33 @@ void TokenIterator::recognizeTokensWithTable() {
     size_t size;
     CharTokenPair pairs[2];
   };
-  // clang-format off
+#define STENTRY0(mt) \
+  { .main_type = mt }
+#define STENTRY1(mt, c0, t0)                                    \
+  {                                                             \
+    .main_type = mt, .size = 1, .pairs = { {.c = c0, .t = t0} } \
+  }
+#define STENTRY2(mt, c1, t1, c2, t2)       \
+  {                                        \
+    .main_type = mt, .size = 2, .pairs = { \
+      {.c = c1, .t = t1},                  \
+      {.c = c2, .t = t2}                   \
+    }                                      \
+  }
   static constexpr ScannerTableEntry scanner_table[] = {
-      {
-        .main_type = TOKEN_DIVIDE,
-        .size = 1,
-        .pairs = {
-          {.c = '/', .t = TOKEN_DIV}
-        }
-      },
-      {
-        .main_type = TOKEN_BNOT,
-        .size = 1,
-        .pairs = {
-          {.c = '=', .t = TOKEN_BNOT_ASSIGN}
-        }
-      },
-      {
-        .main_type = TOKEN_LESS,
-        .size = 2,
-        .pairs = {
-          {.c = '<', .t = TOKEN_BLEFT},
-          {.c = '=', .t = TOKEN_LESS_EQUAL}
-        }
-      },
-      {
-        .main_type = TOKEN_BIGGER,
-        .size = 2,
-        .pairs = {
-          {.c = '>', .t = TOKEN_BRIGHT},
-          {.c = '=', .t = TOKEN_BIGGER_EQUAL}
-        }
-      },
-      {
-        .main_type = TOKEN_ASSIGN,
-        .size = 1,
-        .pairs = {
-          {.c = '=', .t = TOKEN_EQUALS}
-        }
-      },
-      {
-        .main_type = TOKEN_COLON,
-        .size = 1,
-        .pairs = {
-          {.c = ':', .t = TOKEN_COLON_COLON}
-        }
-      }, 
-      {
-        .main_type = TOKEN_PLUS,
-      },
-      {
-        .main_type = TOKEN_MINUS,
-        .size = 1,
-        .pairs = {
-          { .c = '-', .t = TOKEN_COMMENT }
-        }
-      },
-      {
-        .main_type = TOKEN_ASTERISK,
-      },
-      {
-        .main_type = TOKEN_MOD
-      },
-      {
-        .main_type = TOKEN_BXOR
-      },
-      {
-        .main_type = TOKEN_DASH
-      },
-      {
-        .main_type = TOKEN_AT
-      },
-      {
-        .main_type = TOKEN_BOR
-      },
-      {
-        .main_type = TOKEN_LEFT_PAREN
-      },
-      {
-        .main_type = TOKEN_RIGHT_PAREN
-      },
-      {
-        .main_type = TOKEN_LEFT_BRACE
-      },
-      {
-        .main_type = TOKEN_RIGHT_BRACE
-      },
-      {
-        .main_type = TOKEN_LEFT_BRACKET
-      },
-      {
-        .main_type = TOKEN_RIGHT_BRACKET
-      },
-      {
-        .main_type = TOKEN_SEMICOLON
-      },
-      {
-        .main_type = TOKEN_COMMA
-      },
-  };
-  // clang-format on
+      STENTRY1(TOKEN_DIVIDE, '/', TOKEN_DIV),
+      STENTRY1(TOKEN_BNOT, '=', TOKEN_BNOT_ASSIGN),
+      STENTRY2(TOKEN_LESS, '<', TOKEN_BLEFT, '=', TOKEN_LESS_EQUAL),
+      STENTRY2(TOKEN_BIGGER, '>', TOKEN_BRIGHT, '=', TOKEN_BIGGER_EQUAL),
+      STENTRY1(TOKEN_ASSIGN, '=', TOKEN_EQUALS),
+      STENTRY1(TOKEN_COLON, ':', TOKEN_COLON_COLON), STENTRY0(TOKEN_PLUS),
+      STENTRY1(TOKEN_MINUS, '-', TOKEN_COMMENT), STENTRY0(TOKEN_ASTERISK),
+      STENTRY0(TOKEN_MOD), STENTRY0(TOKEN_BXOR), STENTRY0(TOKEN_DASH),
+      STENTRY0(TOKEN_AT), STENTRY0(TOKEN_BOR), STENTRY0(TOKEN_LEFT_PAREN),
+      STENTRY0(TOKEN_RIGHT_PAREN), STENTRY0(TOKEN_LEFT_BRACE),
+      STENTRY0(TOKEN_RIGHT_BRACE), STENTRY0(TOKEN_LEFT_BRACKET),
+      STENTRY0(TOKEN_RIGHT_BRACKET), STENTRY0(TOKEN_SEMICOLON),
+      STENTRY0(TOKEN_COMMA)};
 
   size_t table_index = TOKEN_DIVIDE;
   switch (peekCharacter()) {
