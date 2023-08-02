@@ -30,6 +30,9 @@
   case 'K': case 'L': case 'M': case 'N': case 'O': case 'P':\
   case 'Q': case 'R': case 'S': case 'T': case 'U': case 'V':\
   case 'W': case 'X': case 'Y': case 'Z'
+
+#define LUACOMP_DIGIT_CHAR '0': case '1': case '2': case '3': case '4': case '5': \
+  case '6': case '7': case '8': case '9'
 // clang-format on
 
 namespace {
@@ -61,7 +64,7 @@ inline double charToDigit(char c) {
 inline double hexToNumber(char c) {
   if (isHexChar(c)) {
     if (c >= 'a') {
-      c = c - ('A' - 'a');
+      return c - 'a' + 10;
     }
     return c - 'A' + 10;
   }
@@ -239,6 +242,51 @@ TokenIterator::ScanStringResult TokenIterator::scanString(CheckingFunction f) {
   return {.str = input_ + start, .len = len};
 }
 
+struct ScanIntegerResult {
+  double magnitude;
+  double power_of_base;
+};
+
+static inline ScanIntegerResult scanInteger(
+    const char* str, size_t len, double base) {
+  auto transform = base == 10 ? charToDigit : hexToNumber;
+  double magnitude = 0;
+  double power_of_base = 1;
+  for (size_t i = 0; i < len; ++i) {
+    const auto index = len - i - 1;
+    const auto c = str[index];
+    magnitude += power_of_base * transform(c);
+    power_of_base *= base;
+  }
+  return {magnitude, power_of_base};
+}
+
+double TokenIterator::recognizeExponent(
+    CheckingFunction checker, double exp_base) {
+  double result = 1;
+  char c = nextCharacter();
+  double sign = 1;
+  if (c == '-') {
+    sign = -1;
+    nextCharacter();
+  } else if (c == '+') {
+    c = nextCharacter();
+  }
+  const auto [str, len] = scanString(checker);
+  const auto [number, _] = scanInteger(str, len, 10);
+  auto power = static_cast<size_t>(number);
+  double base_in_power = 1;
+  for (size_t i = 0; i < power; ++i) {
+    base_in_power *= exp_base;
+  }
+  if (sign > 0) {
+    result *= base_in_power;
+  } else {
+    result /= base_in_power;
+  }
+  return result;
+}
+
 void TokenIterator::nextToken() {
   while (true) {
     if (current_input_pos_ == input_size_) {
@@ -258,8 +306,68 @@ void TokenIterator::nextToken() {
           if (c == '.') {
             current_token_.type = TOKEN_3PERIOD;
             ++current_input_pos_;
+          } else {
+            return;
           }
         }
+
+        if (isDigit(c)) {
+          const auto [str, len] = scanString(isDigit);
+          const auto [magnitude, power_of_ten] = scanInteger(str, len, 10);
+          double result = magnitude / power_of_ten;
+          c = peekCharacter();
+          if (c == 'E' || c == 'e') {
+            result *= recognizeExponent(isDigit, 10);
+          }
+          current_token_.type = TOKEN_NUMBER;
+          current_token_.value.number = result;
+        }
+        return;
+      }
+      case LUACOMP_DIGIT_CHAR: {
+        current_token_.type = TOKEN_NUMBER;
+        double base = 10;
+        if (c == '0') {
+          c = nextCharacter();
+          if (current_input_pos_ == input_size_) {
+            current_token_.value.number = 0;
+            return;
+          }
+          if (c == 'x' || c == 'X') {
+            base = 16;
+            c = nextCharacter();
+          }
+        }
+
+        // Here the current char position points to the character right after 0x
+        // (0X) in case of base = 16, otherwise the leading zero is just skipped
+        // and it has no effect on the result
+
+        auto checker = base == 10 ? isDigit : isHexadecimal;
+        const auto [str, len] = scanString(checker);
+        const auto [number, _] = scanInteger(str, len, base);
+        double result = number;
+        c = peekCharacter();
+        if (c == '.') {
+          c = nextCharacter();
+          if (checker(c)) {
+            const auto [str, len] = scanString(checker);
+            const auto [number, magnitude] = scanInteger(str, len, base);
+            result += number / magnitude;
+          }
+        }
+        c = peekCharacter();
+        if (c == 'E' || c == 'e' || c == 'p' || c == 'P') {
+          double exp_base = 10;
+          if (c == 'p' || c == 'P') {
+            if (base == 10) unexpectedCharacter();
+            exp_base = 2;
+          }
+          result *= recognizeExponent(checker, exp_base);
+        }
+
+        current_token_.value.number = result;
+
         return;
       }
       case LUACOMP_SPECIAL_CHAR: {

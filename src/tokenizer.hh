@@ -136,4 +136,7 @@ struct TokenIterator {
   };
   using CheckingFunction = bool (*)(char c);
   ScanStringResult scanString(CheckingFunction f);
+
+  // Recognize exponent
+  double recognizeExponent(CheckingFunction checker, double exp_base);
 };
