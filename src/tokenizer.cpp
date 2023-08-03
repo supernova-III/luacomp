@@ -424,8 +424,6 @@ void TokenIterator::nextToken() {
   }
 }
 
-using TransformingFunction = double (*)(char);
-
 struct EvaluateIntegerResult {
   double magnitude;
   double power;
@@ -449,19 +447,12 @@ EvaluateIntegerResult evaluateIntegerFromString(const char* str, size_t len,
 // dot_position > 0 && dot_position < len - 1 => 123.123
 // exponent_position == len => no exponent
 double EvaluateNumber(const char* string, size_t len, NumberBase base,
-    size_t dot_position, ExponentType exponent_type, size_t exponent_position) {
-  TransformingFunction transform =
-      *base == NumberBase::Enum::HEX ? hexToNumber : charToDigit;
-
-  double integer_part = 0;
-
-  if (dot_position) {
-    const auto [res, _] =
-        evaluateIntegerFromString(string, dot_position, base, transform);
-    integer_part = res;
-    if (dot_position == len - 1 || dot_position == len) {
-      return integer_part;
-    }
+    TransformingFunction transform, size_t dot_position,
+    ExponentType exponent_type, size_t exponent_position) {
+  const auto [integer_part, _] =
+      evaluateIntegerFromString(string, dot_position, base, transform);
+  if (dot_position == len - 1 || dot_position == len) {
+    return integer_part;
   }
 
   // 123.123e12
@@ -489,7 +480,7 @@ double EvaluateNumber(const char* string, size_t len, NumberBase base,
   }
 
   const size_t exponent_number_len = len - next_pos;
-  const auto [exponent_number, _] = evaluateIntegerFromString(
+  const auto [exponent_number, __] = evaluateIntegerFromString(
       string + next_pos, exponent_number_len, base, transform);
   double exponent_part = 1;
   for (size_t i = 0; i < exponent_number_len; ++i) {
