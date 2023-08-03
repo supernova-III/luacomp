@@ -461,11 +461,9 @@ double EvaluateNumber(const char* string, size_t len, NumberBase base,
   // len(123) = exponent_pos - dot_pos - 1
   const auto fractional_part_len = exponent_position - dot_position - 1;
   double fractional_part = 0;
-  if (fractional_part_len > 1) {
-    const auto [res, power] = evaluateIntegerFromString(
-        string + dot_position + 1, fractional_part_len, base, transform);
-    fractional_part = res / power;
-  }
+  const auto [res, power] = evaluateIntegerFromString(
+      string + dot_position + 1, fractional_part_len, base, transform);
+  fractional_part = res / power;
 
   size_t next_pos = 0;
   double sign = 1;
