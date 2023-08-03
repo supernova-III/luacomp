@@ -446,6 +446,8 @@ EvaluateIntegerResult evaluateIntegerFromString(const char* str, size_t len,
 // dot_position == len => no dot
 // dot_position > 0 && dot_position < len - 1 => 123.123
 // exponent_position == len => no exponent
+// TODO: it's better to create a class to control this state and simplify the
+// function usage
 double EvaluateNumber(const char* string, size_t len, NumberBase base,
     TransformingFunction transform, size_t dot_position,
     ExponentType exponent_type, size_t exponent_position) {
