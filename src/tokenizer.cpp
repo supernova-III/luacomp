@@ -438,7 +438,7 @@ EvaluateIntegerResult evaluateIntegerFromString(const char* str, size_t len,
   for (size_t i = 0; i < len; ++i) {
     const size_t index = len - i - 1;
     magnitude += power_of_base * transform(str[index]);
-    power_of_base *= static_cast<double>(base);
+    power_of_base *= base;
   }
   return {magnitude, power_of_base};
 }
@@ -451,7 +451,7 @@ EvaluateIntegerResult evaluateIntegerFromString(const char* str, size_t len,
 double EvaluateNumber(const char* string, size_t len, NumberBase base,
     size_t dot_position, ExponentType exponent_type, size_t exponent_position) {
   TransformingFunction transform =
-      base == NumberBase::HEX ? hexToNumber : charToDigit;
+      *base == NumberBase::Enum::HEX ? hexToNumber : charToDigit;
 
   double integer_part = 0;
 
@@ -493,7 +493,7 @@ double EvaluateNumber(const char* string, size_t len, NumberBase base,
       string + next_pos, exponent_number_len, base, transform);
   double exponent_part = 1;
   for (size_t i = 0; i < exponent_number_len; ++i) {
-    exponent_part *= static_cast<double>(base);
+    exponent_part *= base;
   }
 
   return (integer_part + fractional_part) * exponent_part;

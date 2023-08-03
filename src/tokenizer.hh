@@ -68,9 +68,19 @@ enum LuaTokenType : uint32_t {
 
 static_assert(TOKEN_3PERIOD != TOKEN_DIVIDE);
 
-enum struct NumberBase : uint8_t {
-  DEC = 10,
-  HEX = 16
+struct NumberBase {
+  enum struct Enum : uint8_t {
+    DEC = 10,
+    HEX = 16
+  };
+
+  NumberBase(Enum v) : val(v) {}
+
+  Enum val;
+
+  operator double() const { return static_cast<double>(val); }
+
+  NumberBase::Enum operator*() const { return val; }
 };
 
 enum struct ExponentType : uint8_t {
