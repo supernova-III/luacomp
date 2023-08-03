@@ -289,7 +289,7 @@ double TokenIterator::recognizeExponent(
 
 void TokenIterator::nextToken() {
   while (true) {
-    if (current_input_pos_ == input_size_) {
+    if (current_input_pos_ >= input_size_ || peekCharacter() == '\0') {
       current_token_.type = TOKEN_END_OF_STREAM;
       return;
     }
@@ -298,6 +298,7 @@ void TokenIterator::nextToken() {
 
     switch (c) {
       case '.': {
+        const char* start = input_;
         current_token_.type = TOKEN_PERIOD;
         c = nextCharacter();
         if (c == '.') {
@@ -310,6 +311,28 @@ void TokenIterator::nextToken() {
             return;
           }
         }
+
+        /*
+        if (isDigit(c)) {
+          scanString(isDigit);
+          c = peekCharacter();
+          if (c == 'E' || c == 'e') {
+            c = nextCharacter();
+            if (c == '+' || c == '-') {
+              c = nextCharacter();
+            }
+            if (isDigit(c)) {
+              scanString(isDigit);
+            } else {
+              unexpectedCharacter();
+            }
+          }
+          const size_t number_string_len = input_ + current_input_pos_ - start;
+          current_token_.type = TOKEN_NUMBER;
+          current_token_.value.number =
+              EvaluateNumber(start, number_string_len);
+        }
+        */
 
         if (isDigit(c)) {
           const auto [str, len] = scanString(isDigit);
@@ -391,7 +414,7 @@ void TokenIterator::nextToken() {
       case '\r':
       case '\t': {
         while (input_[++current_input_pos_] == c &&
-               current_input_pos_ != input_size_) {
+               current_input_pos_ < input_size_) {
         }
       } break;
       default: {
@@ -399,4 +422,79 @@ void TokenIterator::nextToken() {
       }
     }
   }
+}
+
+using TransformingFunction = double (*)(char);
+
+struct EvaluateIntegerResult {
+  double magnitude;
+  double power;
+};
+
+EvaluateIntegerResult evaluateIntegerFromString(const char* str, size_t len,
+    NumberBase base, TransformingFunction transform) {
+  double magnitude = 0;
+  double power_of_base = 1;
+  for (size_t i = 0; i < len; ++i) {
+    const size_t index = len - i - 1;
+    magnitude += power_of_base * transform(str[index]);
+    power_of_base *= static_cast<double>(base);
+  }
+  return {magnitude, power_of_base};
+}
+
+// dot_position == 0 => .123
+// dot_position == len - 1 => 123., same as 123, no exponent
+// dot_position == len => no dot
+// dot_position > 0 && dot_position < len - 1 => 123.123
+// exponent_position == len => no exponent
+double EvaluateNumber(const char* string, size_t len, NumberBase base,
+    size_t dot_position, ExponentType exponent_type, size_t exponent_position) {
+  TransformingFunction transform =
+      base == NumberBase::HEX ? hexToNumber : charToDigit;
+
+  double integer_part = 0;
+
+  if (dot_position) {
+    const auto [res, _] =
+        evaluateIntegerFromString(string, dot_position, base, transform);
+    integer_part = res;
+    if (dot_position == len - 1 || dot_position == len) {
+      return integer_part;
+    }
+  }
+
+  // 123.123e12
+  // dot_pos = 3
+  // exponent_pos = 7
+  // len(123) = exponent_pos - dot_pos - 1
+  const auto fractional_part_len = exponent_position - dot_position - 1;
+  double fractional_part = 0;
+  if (fractional_part_len > 1) {
+    const auto [res, power] = evaluateIntegerFromString(
+        string + dot_position + 1, fractional_part_len, base, transform);
+    fractional_part = res / power;
+  }
+
+  size_t next_pos = 0;
+  double sign = 1;
+  switch (exponent_type) {
+    case ExponentType::NONE: return integer_part + fractional_part;
+    case ExponentType::PLAIN: next_pos = exponent_position + 1; break;
+    case ExponentType::MINUS:
+    case ExponentType::PLUS: {
+      next_pos = exponent_position + 2;
+      sign -= 2 * (exponent_type == ExponentType::MINUS);
+    }
+  }
+
+  const size_t exponent_number_len = len - next_pos;
+  const auto [exponent_number, _] = evaluateIntegerFromString(
+      string + next_pos, exponent_number_len, base, transform);
+  double exponent_part = 1;
+  for (size_t i = 0; i < exponent_number_len; ++i) {
+    exponent_part *= static_cast<double>(base);
+  }
+
+  return (integer_part + fractional_part) * exponent_part;
 }

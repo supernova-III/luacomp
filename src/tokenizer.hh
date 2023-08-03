@@ -68,6 +68,25 @@ enum LuaTokenType : uint32_t {
 
 static_assert(TOKEN_3PERIOD != TOKEN_DIVIDE);
 
+enum struct NumberBase : uint8_t {
+  DEC = 10,
+  HEX = 16
+};
+
+enum struct ExponentType : uint8_t {
+  NONE,
+  PLAIN,
+  PLUS,
+  MINUS
+};
+
+// Evaluates a number from a string according to the Lua specification. This
+// function assumes that the string representation of a number is valid, so any
+// validation should be done before calling the function, otherwise the result
+// is unpredictable
+double EvaluateNumber(const char* string, size_t len, NumberBase base,
+    size_t dot_position, ExponentType exponent_type, size_t exponent_position);
+
 // It would be nice to have a token position inside the line of code and the
 // line number, if applicable. But it's rather not to be stored here, because
 // this data is needed only when some error comes in.
