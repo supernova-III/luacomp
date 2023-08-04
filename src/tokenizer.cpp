@@ -494,6 +494,109 @@ double EvaluateNumber(const char* string, size_t len, NumberBase base,
   return (integer_part + fractional_part) * exponent_part;
 }
 
+double EvaluateNumber(const EvaluateNumberArgs& args) {
+  return EvaluateNumber(args.string, args.len, args.base, args.transform,
+      args.dot_position, args.exponent_type, args.exponent_position);
+}
+
+ScanNumberError ScanNumber(
+    const char* string, size_t len, EvaluateNumberArgs& evaluator_args) {
+  const char* cur = string;
+  auto exhausted = [&](const char* cur) { return cur - string >= len; };
+
+  auto base = NumberBase(NumberBase::Enum::DEC);
+
+  // Matching 0x or 0X
+  if (*cur == '0') {
+    ++cur;
+    if (!exhausted(cur) && (*cur == 'x' || *cur == 'X')) {
+      if (len < 3) {
+        return ScanNumberError::UNEXPECTED_END;
+      }
+      base.val = NumberBase::Enum::HEX;
+      ++cur;
+    }
+  }
+
+  evaluator_args.string = cur;
+
+  CheckingFunction checker = IsDigit;
+  CheckingFunction exponent_checker = [](char c) {
+    return c == 'e' || c == 'E';
+  };
+  if (base.val == NumberBase::Enum::HEX) {
+    checker = IsHexadecimal;
+    exponent_checker = [](char c) { return c == 'p' || c == 'P'; };
+  }
+
+  size_t integer_part_len = 0;
+  while (!exhausted(cur) && checker(*cur)) {
+    ++cur;
+    ++integer_part_len;
+  }
+
+  if (*cur == '.') {
+    evaluator_args.dot_position = cur - string;
+    ++cur;
+  }
+
+  if (exhausted(cur)) {
+    if (integer_part_len == 0) {
+      return ScanNumberError::UNEXPECTED_END;
+    }
+    evaluator_args.len = cur - string;
+    return {};
+  }
+
+  size_t fractional_part_len = 0;
+  while (!exhausted(cur) && checker(*cur)) {
+    ++cur;
+    ++fractional_part_len;
+  }
+
+  if (fractional_part_len + integer_part_len == 0) {
+    return ScanNumberError::NO_NUMBER;
+  }
+
+  if (exponent_checker(*cur)) {
+    evaluator_args.exponent_position = cur - string;
+    ++cur;
+    if (!exhausted(cur)) {
+      if (*cur == '+' || *cur == '-') {
+        evaluator_args.exponent_type = ExponentType::PLUS;
+        if (*cur == '-') {
+          evaluator_args.exponent_type = ExponentType::MINUS;
+        }
+        ++cur;
+        if (exhausted(cur)) {
+          return ScanNumberError::UNEXPECTED_END;
+        }
+      } else {
+        evaluator_args.exponent_type = ExponentType::PLAIN;
+      }
+      if (checker(*cur)) {
+        while (!exhausted(cur) && IsDigit(*cur)) {
+          ++cur;
+        }
+      } else {
+        return ScanNumberError::UNEXPECTED_END;
+      }
+    }
+  }
+  evaluator_args.len = cur - string;
+  return {};
+}
+
+double ScanEndEvaluateNumber(
+    const char* string, size_t len, ScanNumberError& error) {
+  EvaluateNumberArgs args = {};
+  error = ScanNumber(string, len, args);
+  if (error == ScanNumberError::OK) {
+    return EvaluateNumber(args);
+  }
+  return {};
+}
+
 ScanNumberError ScanNumber(
     const char* string, size_t len, size_t& matched_substring_len) {
   const char* cur = string;

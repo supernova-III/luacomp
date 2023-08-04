@@ -112,6 +112,16 @@ enum struct ExponentType : uint8_t {
 using TransformingFunction = double (*)(char);
 using CheckingFunction = bool (*)(char c);
 
+struct EvaluateNumberArgs {
+  const char* string;
+  size_t len;
+  NumberBase base = NumberBase::Enum::DEC;
+  TransformingFunction transform;
+  size_t dot_position;
+  ExponentType exponent_type;
+  size_t exponent_position;
+};
+
 // Evaluates a number from a string according to the Lua specification. This
 // function assumes that the string representation of a number is valid, so any
 // validation should be done before calling the function, otherwise the result
@@ -119,6 +129,9 @@ using CheckingFunction = bool (*)(char c);
 double EvaluateNumber(const char* string, size_t len, NumberBase base,
     TransformingFunction transform, size_t dot_position,
     ExponentType exponent_type, size_t exponent_position);
+
+// Same as definition above, but accepts EvaluateNumberArgs structure
+double EvaluateNumber(const EvaluateNumberArgs& args);
 
 enum struct ScanNumberError {
   OK,
@@ -131,6 +144,16 @@ enum struct ScanNumberError {
 // match_substring_len
 ScanNumberError ScanNumber(
     const char* string, size_t len, size_t& matched_substring_len);
+
+// Recognizes a number, collecting all information required for quick evaluation
+// of a number
+ScanNumberError ScanNumber(
+    const char* string, size_t size, EvaluateNumberArgs& evaluator_args);
+
+// Scans and evaluates a number in a string. If scan fail, an error code will be
+// place into error parameter
+double ScanEndEvaluateNumber(
+    const char* string, size_t len, ScanNumberError& error);
 
 struct Token {
   LuaTokenType type = TOKEN_END_OF_STREAM;
