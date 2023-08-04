@@ -440,19 +440,10 @@ EvaluateIntegerResult evaluateIntegerFromString(const char* str, size_t len,
   return {magnitude, power_of_base};
 }
 
-// dot_position == 0 => .123
-// dot_position == len - 1 => 123., same as 123, no exponent
-// dot_position == len => no dot
-// dot_position > 0 && dot_position < len - 1 => 123.123
-// exponent_position == len => no exponent
-// TODO: it's better to create a class to control this state and simplify the
-// function usage
-double EvaluateNumber(const char* string, size_t len, NumberBase base,
-    TransformingFunction transform, size_t dot_position,
-    ExponentType exponent_type, size_t exponent_position) {
-  const auto [integer_part, _] =
-      evaluateIntegerFromString(string, dot_position, base, transform);
-  if (dot_position == len - 1 || dot_position == len) {
+double EvaluateNumber(const EvaluateNumberArgs& args) {
+  const auto [integer_part, _] = evaluateIntegerFromString(
+      args.string, args.dot_position, args.base, args.transform);
+  if (args.dot_position == args.len - 1 || args.dot_position == args.len) {
     return integer_part;
   }
 
@@ -460,28 +451,30 @@ double EvaluateNumber(const char* string, size_t len, NumberBase base,
   // dot_pos = 3
   // exponent_pos = 7
   // len(123) = exponent_pos - dot_pos - 1
-  const auto fractional_part_len = exponent_position - dot_position - 1;
+  const auto fractional_part_len =
+      args.exponent_position - args.dot_position - 1;
   double fractional_part = 0;
-  const auto [res, power] = evaluateIntegerFromString(
-      string + dot_position + 1, fractional_part_len, base, transform);
+  const auto [res, power] =
+      evaluateIntegerFromString(args.string + args.dot_position + 1,
+          fractional_part_len, args.base, args.transform);
   fractional_part = res / power;
 
   size_t next_pos = 0;
   double sign = 1;
-  const double exponent_base = 10 - 8 * (base.val == NumberBase::Enum::HEX);
-  switch (exponent_type) {
+  const double exponent_base = 10 - 8 * (args.base == NumberBase::Hex());
+  switch (args.exponent_type) {
     case ExponentType::NONE: return integer_part + fractional_part;
-    case ExponentType::PLAIN: next_pos = exponent_position + 1; break;
+    case ExponentType::PLAIN: next_pos = args.exponent_position + 1; break;
     case ExponentType::MINUS:
     case ExponentType::PLUS: {
-      next_pos = exponent_position + 2;
-      sign -= 2 * (exponent_type == ExponentType::MINUS);
+      next_pos = args.exponent_position + 2;
+      sign -= 2 * (args.exponent_type == ExponentType::MINUS);
     }
   }
 
-  const size_t exponent_number_len = len - next_pos;
+  const size_t exponent_number_len = args.len - next_pos;
   const auto [exponent_number, __] = evaluateIntegerFromString(
-      string + next_pos, exponent_number_len, base, transform);
+      args.string + next_pos, exponent_number_len, args.base, args.transform);
   double exponent_part = 1;
   for (size_t i = 0; i < exponent_number; ++i) {
     exponent_part *= exponent_base;
@@ -492,11 +485,6 @@ double EvaluateNumber(const char* string, size_t len, NumberBase base,
   }
 
   return (integer_part + fractional_part) * exponent_part;
-}
-
-double EvaluateNumber(const EvaluateNumberArgs& args) {
-  return EvaluateNumber(args.string, args.len, args.base, args.transform,
-      args.dot_position, args.exponent_type, args.exponent_position);
 }
 
 ScanNumberError ScanNumber(
@@ -602,7 +590,7 @@ ScanNumberError ScanNumber(
   const char* cur = string;
   auto exhausted = [&](const char* cur) { return cur - string >= len; };
 
-  auto base = NumberBase(NumberBase::Enum::DEC);
+  auto base = NumberBase::Dec();
 
   // Matching 0x or 0X
   if (*cur == '0') {
@@ -611,7 +599,7 @@ ScanNumberError ScanNumber(
       if (len < 3) {
         return ScanNumberError::UNEXPECTED_END;
       }
-      base.val = NumberBase::Enum::HEX;
+      base = NumberBase::Hex();
       ++cur;
     }
   }
@@ -620,7 +608,7 @@ ScanNumberError ScanNumber(
   CheckingFunction exponent_checker = [](char c) {
     return c == 'e' || c == 'E';
   };
-  if (base.val == NumberBase::Enum::HEX) {
+  if (base == NumberBase::Hex()) {
     checker = IsHexadecimal;
     exponent_checker = [](char c) { return c == 'p' || c == 'P'; };
   }
