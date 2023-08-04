@@ -35,41 +35,17 @@
   case '6': case '7': case '8': case '9'
 // clang-format on
 
-namespace {
-
-inline bool isAlpha(char c) {
-  return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
-}
-
-inline bool isDigit(char c) {
-  return c >= '0' && c <= '9';
-}
-
-inline bool isHexChar(char c) {
-  return (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
-}
-
-inline bool isHexadecimal(char c) {
-  return isDigit(c) || isHexChar(c);
-}
-
-inline bool isKeywordCharacter(char c) {
-  return isAlpha(c) || isDigit(c) || c == '_';
-}
-
-inline double charToDigit(char c) {
-  return c - '0';
-}
-
-inline double hexToNumber(char c) {
-  if (isHexChar(c)) {
+double HexToNumber(char c) {
+  if (IsHexChar(c)) {
     if (c >= 'a') {
       return c - 'a' + 10;
     }
     return c - 'A' + 10;
   }
-  return charToDigit(c);
+  return CharToDigit(c);
 }
+
+namespace {
 
 inline constexpr size_t idx(char c) {
   return c - 'a';
@@ -128,6 +104,29 @@ LuaTokenType recognizeKeywordsWithTable(const char* str, size_t len) {
   return TOKEN_IDENTIFIER;
 }
 }  // namespace
+
+bool IsDigit(char c) {
+  return c >= '0' && c <= '9';
+}
+bool IsAlpha(char c) {
+  return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+}
+
+bool IsHexChar(char c) {
+  return (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+}
+
+bool IsHexadecimal(char c) {
+  return IsDigit(c) || IsHexChar(c);
+}
+
+double CharToDigit(char c) {
+  return c - '0';
+}
+
+bool IsKeywordCharacter(char c) {
+  return IsAlpha(c) || IsDigit(c) || c == '_';
+}
 
 TokenIterator::TokenIterator(
     const char* input_name, const char* input, size_t size)
@@ -249,7 +248,7 @@ struct ScanIntegerResult {
 
 static inline ScanIntegerResult scanInteger(
     const char* str, size_t len, double base) {
-  auto transform = base == 10 ? charToDigit : hexToNumber;
+  auto transform = base == 10 ? CharToDigit : HexToNumber;
   double magnitude = 0;
   double power_of_base = 1;
   for (size_t i = 0; i < len; ++i) {
@@ -313,16 +312,16 @@ void TokenIterator::nextToken() {
         }
 
         /*
-        if (isDigit(c)) {
-          scanString(isDigit);
+        if (IsDigit(c)) {
+          scanString(IsDigit);
           c = peekCharacter();
           if (c == 'E' || c == 'e') {
             c = nextCharacter();
             if (c == '+' || c == '-') {
               c = nextCharacter();
             }
-            if (isDigit(c)) {
-              scanString(isDigit);
+            if (IsDigit(c)) {
+              scanString(IsDigit);
             } else {
               unexpectedCharacter();
             }
@@ -334,13 +333,13 @@ void TokenIterator::nextToken() {
         }
         */
 
-        if (isDigit(c)) {
-          const auto [str, len] = scanString(isDigit);
+        if (IsDigit(c)) {
+          const auto [str, len] = scanString(IsDigit);
           const auto [magnitude, power_of_ten] = scanInteger(str, len, 10);
           double result = magnitude / power_of_ten;
           c = peekCharacter();
           if (c == 'E' || c == 'e') {
-            result *= recognizeExponent(isDigit, 10);
+            result *= recognizeExponent(IsDigit, 10);
           }
           current_token_.type = TOKEN_NUMBER;
           current_token_.value.number = result;
@@ -366,7 +365,7 @@ void TokenIterator::nextToken() {
         // (0X) in case of base = 16, otherwise the leading zero is just skipped
         // and it has no effect on the result
 
-        auto checker = base == 10 ? isDigit : isHexadecimal;
+        auto checker = base == 10 ? IsDigit : IsHexadecimal;
         const auto [str, len] = scanString(checker);
         const auto [number, _] = scanInteger(str, len, base);
         double result = number;
@@ -398,7 +397,7 @@ void TokenIterator::nextToken() {
         return;
       }
       case LUACOMP_ALPHA_CHAR: {
-        const auto [str, len] = scanString(isKeywordCharacter);
+        const auto [str, len] = scanString(IsKeywordCharacter);
         LuaTokenType token_type = recognizeKeywordsWithTable(str, len);
         current_token_.type = token_type;
         if (token_type == TOKEN_IDENTIFIER) {
@@ -469,6 +468,7 @@ double EvaluateNumber(const char* string, size_t len, NumberBase base,
 
   size_t next_pos = 0;
   double sign = 1;
+  const double exponent_base = 10 - 8 * (base.val == NumberBase::Enum::HEX);
   switch (exponent_type) {
     case ExponentType::NONE: return integer_part + fractional_part;
     case ExponentType::PLAIN: next_pos = exponent_position + 1; break;
@@ -483,8 +483,12 @@ double EvaluateNumber(const char* string, size_t len, NumberBase base,
   const auto [exponent_number, __] = evaluateIntegerFromString(
       string + next_pos, exponent_number_len, base, transform);
   double exponent_part = 1;
-  for (size_t i = 0; i < exponent_number_len; ++i) {
-    exponent_part *= base;
+  for (size_t i = 0; i < exponent_number; ++i) {
+    exponent_part *= exponent_base;
+  }
+
+  if (sign < 0) {
+    exponent_part = 1 / exponent_part;
   }
 
   return (integer_part + fractional_part) * exponent_part;
@@ -509,12 +513,12 @@ ScanNumberError ScanNumber(
     }
   }
 
-  CheckingFunction checker = isDigit;
+  CheckingFunction checker = IsDigit;
   CheckingFunction exponent_checker = [](char c) {
     return c == 'e' || c == 'E';
   };
   if (base.val == NumberBase::Enum::HEX) {
-    checker = isHexadecimal;
+    checker = IsHexadecimal;
     exponent_checker = [](char c) { return c == 'p' || c == 'P'; };
   }
 
@@ -556,7 +560,7 @@ ScanNumberError ScanNumber(
         }
       }
       if (checker(*cur)) {
-        while (!exhausted(cur) && isDigit(*cur)) {
+        while (!exhausted(cur) && IsDigit(*cur)) {
           ++cur;
         }
       } else {

@@ -74,28 +74,55 @@ TEST(Tokenizer, ScanNumber) {
 }
 
 TEST(Tokenizer, EvaluateNumber) {
-  auto l = [](char c) { return double(c - '0'); };
   auto res = EvaluateNumber(
-      STR("123"), NumberBase::Enum::DEC, l, 3, ExponentType{}, 3);
+      STR("123"), NumberBase::Enum::DEC, CharToDigit, 3, ExponentType{}, 3);
   EXPECT_EQ(res, 123);
 
   res = EvaluateNumber(
-      STR("123.123"), NumberBase::Enum::DEC, l, 3, ExponentType{}, 7);
+      STR("123.123"), NumberBase::Enum::DEC, CharToDigit, 3, ExponentType{}, 7);
   EXPECT_EQ(res, 123.123);
 
   res = EvaluateNumber(
-      STR(".123"), NumberBase::Enum::DEC, l, 0, ExponentType{}, 4);
+      STR(".123"), NumberBase::Enum::DEC, CharToDigit, 0, ExponentType{}, 4);
   EXPECT_EQ(res, .123);
 
   res = EvaluateNumber(
-      STR("123."), NumberBase::Enum::DEC, l, 3, ExponentType{}, 4);
+      STR("123."), NumberBase::Enum::DEC, CharToDigit, 3, ExponentType{}, 4);
   EXPECT_EQ(res, 123.);
 
-  res = EvaluateNumber(
-      STR("123.1E+1"), NumberBase::Enum::DEC, l, 3, ExponentType::PLUS, 5);
+  res = EvaluateNumber(STR("123.1E+1"), NumberBase::Enum::DEC, CharToDigit, 3,
+      ExponentType::PLUS, 5);
   EXPECT_EQ(res, 123.1e+1);
 
+  res = EvaluateNumber(STR(".2E-3"), NumberBase::Enum::DEC, CharToDigit, 0,
+      ExponentType::MINUS, 2);
+  EXPECT_EQ(res, .2e-3);
+
   res = EvaluateNumber(
-      STR(".1E-1"), NumberBase::Enum::DEC, l, 0, ExponentType::MINUS, 2);
-  EXPECT_EQ(res, .1e+1);
+      STR("1"), NumberBase::Enum::HEX, HexToNumber, 1, ExponentType{}, 1);
+  EXPECT_EQ(res, 0x1);
+
+  res = EvaluateNumber(
+      STR("ff"), NumberBase::Enum::HEX, HexToNumber, 2, ExponentType{}, 2);
+  EXPECT_EQ(res, 0xff);
+
+  res = EvaluateNumber(
+      STR("f.f"), NumberBase::Enum::HEX, HexToNumber, 1, ExponentType{}, 3);
+  EXPECT_EQ(res, 0xf.fp0);
+
+  res = EvaluateNumber(STR("12f.12fp+2"), NumberBase::Enum::HEX, HexToNumber, 3,
+      ExponentType::PLUS, 7);
+  EXPECT_EQ(res, 0x12f.12fp2);
+
+  res = EvaluateNumber(STR("12f.12fp-2"), NumberBase::Enum::HEX, HexToNumber, 3,
+      ExponentType::MINUS, 7);
+  EXPECT_EQ(res, 0x12f.12fp-2);
+
+  res = EvaluateNumber(STR(".12fp-2"), NumberBase::Enum::HEX, HexToNumber, 0,
+      ExponentType::MINUS, 4);
+  EXPECT_EQ(res, 0x.12fp-2);
+
+  res = EvaluateNumber(STR("12f.p-2"), NumberBase::Enum::HEX, HexToNumber, 3,
+      ExponentType::MINUS, 4);
+  EXPECT_EQ(res, 0x12f.p-2);
 }
