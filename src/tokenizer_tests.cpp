@@ -72,3 +72,30 @@ TEST(Tokenizer, ScanNumber) {
   EXPECT_EQ(res, ScanNumberError::OK);
   EXPECT_EQ(len, 9);
 }
+
+TEST(Tokenizer, EvaluateNumber) {
+  auto l = [](char c) { return double(c - '0'); };
+  auto res = EvaluateNumber(
+      STR("123"), NumberBase::Enum::DEC, l, 3, ExponentType{}, 3);
+  EXPECT_EQ(res, 123);
+
+  res = EvaluateNumber(
+      STR("123.123"), NumberBase::Enum::DEC, l, 3, ExponentType{}, 7);
+  EXPECT_EQ(res, 123.123);
+
+  res = EvaluateNumber(
+      STR(".123"), NumberBase::Enum::DEC, l, 0, ExponentType{}, 4);
+  EXPECT_EQ(res, .123);
+
+  res = EvaluateNumber(
+      STR("123."), NumberBase::Enum::DEC, l, 3, ExponentType{}, 4);
+  EXPECT_EQ(res, 123.);
+
+  res = EvaluateNumber(
+      STR("123.1E+1"), NumberBase::Enum::DEC, l, 3, ExponentType::PLUS, 5);
+  EXPECT_EQ(res, 123.1e+1);
+
+  res = EvaluateNumber(
+      STR(".1E-1"), NumberBase::Enum::DEC, l, 0, ExponentType::MINUS, 2);
+  EXPECT_EQ(res, .1e+1);
+}
