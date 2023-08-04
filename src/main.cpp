@@ -3,8 +3,12 @@
 #include <fstream>
 #include <iterator>
 #include <vector>
+#include <string>
 
 int main(int argc, char* argv[]) try {
+  double x = std::stod("0x.12efp-2");
+  printf("%f\n", x);
+
   if (argc != 2) {
     throw RuntimeError("Usage: %s <source_file>", argv[0]);
   }
