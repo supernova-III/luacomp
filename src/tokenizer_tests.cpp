@@ -2,23 +2,6 @@
 #include "tokenizer.cpp"
 #include <gtest/gtest.h>
 
-TEST(Tokenizer, Creation) {
-  const char program[] = R"(
-    function print(...)
-    end
-  )";
-  auto iter = TokenIterator("", program, sizeof(program));
-  EXPECT_FALSE(iter);
-  LuaTokenType expected_tokens[] = {TOKEN_FUNCTION, TOKEN_IDENTIFIER,
-      TOKEN_LEFT_PAREN, TOKEN_3PERIOD, TOKEN_RIGHT_PAREN, TOKEN_END};
-  for (const auto tok : expected_tokens) {
-    ++iter;
-    ASSERT_EQ(tok, (*iter).type);
-  }
-  ++iter;
-  EXPECT_FALSE(iter);
-}
-
 bool operator==(const Token& left, const Token& right) {
   if (left.type == right.type) {
     switch (left.type) {
@@ -34,144 +17,58 @@ bool operator==(const Token& left, const Token& right) {
   return false;
 }
 
-struct NumberScanTestData {
-  Token expected;
-  TokenIterator iterator;
-};
+#define STR(s) s, sizeof(s) - 1
 
-NumberScanTestData numberScanTestBase(double expected_value, const char* str) {
-  const size_t len = strlen(str);
-  Token expected = {.type = TOKEN_NUMBER,
-      .value = decltype(Token::value){.number = expected_value}};
-  return {expected, TokenIterator("", str, len)};
-}
+TEST(Tokenizer, ScanNumber) {
+  size_t len = 0;
+  auto res = ScanNumber(STR("123   "), len);
+  EXPECT_EQ(res, ScanNumberError::OK);
+  EXPECT_EQ(len, 3);
 
-TEST(Tokenizer, BasicIntegerScan) {
-  {
-    auto [expected, iter] = numberScanTestBase(12345, "12345");
-    ++iter;
-    ASSERT_EQ(expected, *iter);
-  }
+  res = ScanNumber(STR("123.123   "), len);
+  EXPECT_EQ(res, ScanNumberError::OK);
+  EXPECT_EQ(len, 7);
 
-  {
-    auto [expected, iter] = numberScanTestBase(12345, "00012345");
-    ++iter;
-    ASSERT_EQ(expected, *iter);
-  }
+  res = ScanNumber(STR("123.123e+10   "), len);
+  EXPECT_EQ(res, ScanNumberError::OK);
+  EXPECT_EQ(len, 11);
 
-  {
-    auto [expected, iter] = numberScanTestBase(0, "000x12345");
-    ++iter;
-    ASSERT_EQ(expected, *iter);
-    ++iter;
-    ASSERT_EQ(TOKEN_IDENTIFIER, (*iter).type);
-  }
-}
+  res = ScanNumber(STR(".123e+10   "), len);
+  EXPECT_EQ(res, ScanNumberError::OK);
+  EXPECT_EQ(len, 8);
 
-TEST(Tokenizer, BasicFloatScan_Decimal) {
-  auto [expected, iter] = numberScanTestBase(123.45, "123.45");
-  ++iter;
-  ASSERT_EQ(expected, *iter);
-}
+  res = ScanNumber(STR(".e+10   "), len);
+  EXPECT_EQ(res, ScanNumberError::NO_NUMBER);
 
-TEST(Tokenizer, BasicFloatScanWithEmptyIntegerPart_Decimal) {
-  auto [expected, iter] = numberScanTestBase(.45, ".45");
-  ++iter;
-  ASSERT_EQ(expected, *iter);
-}
+  res = ScanNumber(STR(".123e+10   "), len);
+  EXPECT_EQ(res, ScanNumberError::OK);
+  EXPECT_EQ(len, 8);
 
-TEST(Tokenizer, BasicFloatScanWithEmptyFractionalPart_Decimal) {
-  auto [expected, iter] = numberScanTestBase(45., "45.");
-  ++iter;
-  ASSERT_EQ(expected, *iter);
-}
+  res = ScanNumber(STR("123.e-10   "), len);
+  EXPECT_EQ(res, ScanNumberError::OK);
+  EXPECT_EQ(len, 8);
 
-TEST(Tokenizer, BasicFloatScanWithExponent_Decimal) {
-  {
-    auto [expected, iter] = numberScanTestBase(45.1e10, "45.1e10");
-    ++iter;
-    ASSERT_EQ(expected, *iter);
-  }
-  {
-    auto [expected, iter] = numberScanTestBase(45.1000e-10, "45.1000e-10");
-    ++iter;
-    ASSERT_EQ(expected, *iter);
-  }
-  {
-    auto [expected, iter] = numberScanTestBase(45.1e+10, "45.1e+10");
-    ++iter;
-    ASSERT_EQ(expected, *iter);
-  }
-}
+  res = ScanNumber(STR("123.e-10 asdasd"), len);
+  EXPECT_EQ(res, ScanNumberError::OK);
+  EXPECT_EQ(len, 8);
 
-TEST(Tokenizer, BasicFloatScanWithExponentAndEmptyIntegerPart_Decimal) {
-  auto [expected, iter] = numberScanTestBase(.123e10, ".123e10");
-  ++iter;
-  ASSERT_EQ(expected, *iter);
-}
+  res = ScanNumber(STR("0x123.e-10 asdasd"), len);
+  EXPECT_EQ(res, ScanNumberError::OK);
+  EXPECT_EQ(len, 7);
 
-TEST(Tokenizer, BasicFloatScanWithExponentAndEmptyFractionalPart_Decimal) {
-  auto [expected, iter] = numberScanTestBase(123.e10, "123.e10");
-  ++iter;
-  ASSERT_EQ(expected, *iter);
-}
+  res = ScanNumber(STR("0xabcef.effp-10 asdasd"), len);
+  EXPECT_EQ(res, ScanNumberError::OK);
+  EXPECT_EQ(len, 15);
 
-TEST(Tokenizer, BasicIntegerScan_Hex) {
-  {
-    auto [expected, iter] = numberScanTestBase(0x123, "0x123");
-    ++iter;
-    ASSERT_EQ(expected, *iter);
-  }
-  auto [expected, iter] = numberScanTestBase(0x123, "0x00000123");
-  ++iter;
-  ASSERT_EQ(expected, *iter);
-}
+  res = ScanNumber(STR("0xabcef.effp+10 asdasd"), len);
+  EXPECT_EQ(res, ScanNumberError::OK);
+  EXPECT_EQ(len, 15);
 
-TEST(Tokenizer, BasicFloatScan_Hex) {
-  auto [expected, iter] =
-      numberScanTestBase(0x123ab.123abep0, "0x123ab.123abe");
-  ++iter;
-  ASSERT_EQ(expected, *iter);
-}
+  res = ScanNumber(STR("0xabcef.effp10 asdasd"), len);
+  EXPECT_EQ(res, ScanNumberError::OK);
+  EXPECT_EQ(len, 14);
 
-TEST(Tokenizer, BasicFloatScanWithoutFractionalPart_Hex) {
-  auto [expected, iter] = numberScanTestBase(0x123.p0, "0x123.");
-  ++iter;
-  ASSERT_EQ(expected, *iter);
-}
-
-TEST(Tokenizer, BasicFloatScanWithoutIntegerPart_Hex) {
-  auto [expected, iter] = numberScanTestBase(0x.123p0, "0x.123");
-  ++iter;
-  ASSERT_EQ(expected, *iter);
-}
-
-TEST(Tokenizer, BasicFloatScanWithExponent_Hex) {
-  {
-    auto [expected, iter] = numberScanTestBase(0x123.1bep12, "0x123.1bep12");
-    ++iter;
-    ASSERT_EQ(expected, *iter);
-  }
-  {
-    auto [expected, iter] = numberScanTestBase(0x123.1bep-12, "0x123.1bep-12");
-    ++iter;
-    ASSERT_EQ(expected, *iter);
-  }
-  {
-    auto [expected, iter] = numberScanTestBase(0x123.1bep+12, "0x123.1bep+12");
-    ++iter;
-    ASSERT_EQ(expected, *iter);
-  }
-}
-
-TEST(Tokenizer, BasicFloatScanWithExponentWithoutIntegerPart_Hex) {
-  auto [expected, iter] = numberScanTestBase(0x.123p12, "0x.123p12");
-  ++iter;
-  ASSERT_EQ(expected, *iter);
-}
-
-TEST(Tokenizer, BasicFloatScanWithExponentWithoutFloatPart_Hex) {
-  auto [expected, iter] = numberScanTestBase(0x123.p12, "0x123.p12");
-  ++iter;
-  ASSERT_EQ(expected, *iter);
+  res = ScanNumber(STR("0x.effp10 asdasd"), len);
+  EXPECT_EQ(res, ScanNumberError::OK);
+  EXPECT_EQ(len, 9);
 }

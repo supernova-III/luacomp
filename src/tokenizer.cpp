@@ -489,3 +489,81 @@ double EvaluateNumber(const char* string, size_t len, NumberBase base,
 
   return (integer_part + fractional_part) * exponent_part;
 }
+
+ScanNumberError ScanNumber(
+    const char* string, size_t len, size_t& matched_substring_len) {
+  const char* cur = string;
+  auto exhausted = [&](const char* cur) { return cur - string >= len; };
+
+  auto base = NumberBase(NumberBase::Enum::DEC);
+
+  // Matching 0x or 0X
+  if (*cur == '0') {
+    ++cur;
+    if (!exhausted(cur) && (*cur == 'x' || *cur == 'X')) {
+      if (len < 3) {
+        return ScanNumberError::UNEXPECTED_END;
+      }
+      base.val = NumberBase::Enum::HEX;
+      ++cur;
+    }
+  }
+
+  CheckingFunction checker = isDigit;
+  CheckingFunction exponent_checker = [](char c) {
+    return c == 'e' || c == 'E';
+  };
+  if (base.val == NumberBase::Enum::HEX) {
+    checker = isHexadecimal;
+    exponent_checker = [](char c) { return c == 'p' || c == 'P'; };
+  }
+
+  size_t integer_part_len = 0;
+  while (!exhausted(cur) && checker(*cur)) {
+    ++cur;
+    ++integer_part_len;
+  }
+
+  if (*cur == '.') {
+    ++cur;
+  }
+
+  if (exhausted(cur)) {
+    if (integer_part_len == 0) {
+      return ScanNumberError::UNEXPECTED_END;
+    }
+    matched_substring_len = cur - string;
+    return {};
+  }
+
+  size_t fractional_part_len = 0;
+  while (!exhausted(cur) && checker(*cur)) {
+    ++cur;
+    ++fractional_part_len;
+  }
+
+  if (fractional_part_len + integer_part_len == 0) {
+    return ScanNumberError::NO_NUMBER;
+  }
+
+  if (exponent_checker(*cur)) {
+    ++cur;
+    if (!exhausted(cur)) {
+      if (*cur == '+' || *cur == '-') {
+        ++cur;
+        if (exhausted(cur)) {
+          return ScanNumberError::UNEXPECTED_END;
+        }
+      }
+      if (checker(*cur)) {
+        while (!exhausted(cur) && isDigit(*cur)) {
+          ++cur;
+        }
+      } else {
+        return ScanNumberError::UNEXPECTED_END;
+      }
+    }
+  }
+  matched_substring_len = cur - string;
+  return {};
+}

@@ -61,12 +61,17 @@ enum LuaTokenType : uint32_t {
   TOKEN_COMMENT,       // ok
   TOKEN_LONG_STRING_LITERAL,
   TOKEN_SHORT_STRING_LITERAL,
+
+  // clang-format off
+  // LuaNumber          -> ReducedDecimalForm | HexForm |  FullDecimalForm
+  // FullDecimalForm    -> [0-9]+(\.[0-9]?)?([eE][+-]?[0-9]+)?$
+  // ReducedDecimalForm -> \.[0-9]+([eE][+-]?[0-9]+)?$
+  // HexForm            -> (0[xX])[0-9a-fA-F]+(\.[0-9a-fA-F]*)*([pP][+-]?[0-9]+)?$
+  // clang-format on
   TOKEN_NUMBER,
   TOKEN_IDENTIFIER,
   TOKEN_END_OF_STREAM  // ok
 };
-
-static_assert(TOKEN_3PERIOD != TOKEN_DIVIDE);
 
 struct NumberBase {
   enum struct Enum : uint8_t {
@@ -91,6 +96,7 @@ enum struct ExponentType : uint8_t {
 };
 
 using TransformingFunction = double (*)(char);
+using CheckingFunction = bool (*)(char c);
 
 // Evaluates a number from a string according to the Lua specification. This
 // function assumes that the string representation of a number is valid, so any
@@ -100,9 +106,18 @@ double EvaluateNumber(const char* string, size_t len, NumberBase base,
     TransformingFunction transform, size_t dot_position,
     ExponentType exponent_type, size_t exponent_position);
 
-// It would be nice to have a token position inside the line of code and the
-// line number, if applicable. But it's rather not to be stored here, because
-// this data is needed only when some error comes in.
+enum struct ScanNumberError {
+  OK,
+  UNEXPECTED_END,
+  NO_NUMBER
+};
+
+// Recognize a number in a string. If returned value is OK, then the length of a
+// substring containing a valid number representation is set to
+// match_substring_len
+ScanNumberError ScanNumber(
+    const char* string, size_t len, size_t& matched_substring_len);
+
 struct Token {
   LuaTokenType type = TOKEN_END_OF_STREAM;
   union {
@@ -166,7 +181,6 @@ struct TokenIterator {
     const char* str;
     size_t len;
   };
-  using CheckingFunction = bool (*)(char c);
   ScanStringResult scanString(CheckingFunction f);
 
   // Recognize exponent
