@@ -17,112 +17,50 @@ bool operator==(const Token& left, const Token& right) {
   return false;
 }
 
-#define STR(s) s, sizeof(s) - 1
-
-TEST(Tokenizer, ScanNumber) {
-  size_t len = 0;
-  auto res = ScanNumber(STR("123   "), len);
-  EXPECT_EQ(res, ScanNumberError::OK);
-  EXPECT_EQ(len, 3);
-
-  res = ScanNumber(STR("123.123   "), len);
-  EXPECT_EQ(res, ScanNumberError::OK);
-  EXPECT_EQ(len, 7);
-
-  res = ScanNumber(STR("123.123e+10   "), len);
-  EXPECT_EQ(res, ScanNumberError::OK);
-  EXPECT_EQ(len, 11);
-
-  res = ScanNumber(STR(".123e+10   "), len);
-  EXPECT_EQ(res, ScanNumberError::OK);
-  EXPECT_EQ(len, 8);
-
-  res = ScanNumber(STR(".e+10   "), len);
-  EXPECT_EQ(res, ScanNumberError::NO_NUMBER);
-
-  res = ScanNumber(STR(".123e+10   "), len);
-  EXPECT_EQ(res, ScanNumberError::OK);
-  EXPECT_EQ(len, 8);
-
-  res = ScanNumber(STR("123.e-10   "), len);
-  EXPECT_EQ(res, ScanNumberError::OK);
-  EXPECT_EQ(len, 8);
-
-  res = ScanNumber(STR("123.e-10 asdasd"), len);
-  EXPECT_EQ(res, ScanNumberError::OK);
-  EXPECT_EQ(len, 8);
-
-  res = ScanNumber(STR("0x123.e-10 asdasd"), len);
-  EXPECT_EQ(res, ScanNumberError::OK);
-  EXPECT_EQ(len, 7);
-
-  res = ScanNumber(STR("0xabcef.effp-10 asdasd"), len);
-  EXPECT_EQ(res, ScanNumberError::OK);
-  EXPECT_EQ(len, 15);
-
-  res = ScanNumber(STR("0xabcef.effp+10 asdasd"), len);
-  EXPECT_EQ(res, ScanNumberError::OK);
-  EXPECT_EQ(len, 15);
-
-  res = ScanNumber(STR("0xabcef.effp10 asdasd"), len);
-  EXPECT_EQ(res, ScanNumberError::OK);
-  EXPECT_EQ(len, 14);
-
-  res = ScanNumber(STR("0x.effp10 asdasd"), len);
-  EXPECT_EQ(res, ScanNumberError::OK);
-  EXPECT_EQ(len, 9);
+bool operator==(
+    const EvaluateNumberResult& lhs, const EvaluateNumberResult& rhs) {
+  bool res = lhs.number == rhs.number;
+  res = res && (lhs.len == rhs.len);
+  res = res && (lhs.error == rhs.error);
+  return res;
 }
 
-TEST(Tokenizer, EvaluateNumber) {
-  auto res = EvaluateNumber(
-      {STR("123"), NumberBase::Enum::DEC, CharToDigit, 3, ExponentType{}, 3});
-  EXPECT_EQ(res, 123);
+#define STR(s) s, sizeof(s) - 1
 
-  res = EvaluateNumber({STR("123.123"), NumberBase::Enum::DEC, CharToDigit, 3,
-      ExponentType{}, 7});
-  EXPECT_EQ(res, 123.123);
+TEST(Tokenizer, TryEvaluateNumber) {
+  auto res = TryEvaluateNumber(STR("123   "));
+  EXPECT_EQ(res, EvaluateNumberResult(123, 3));
 
-  res = EvaluateNumber(
-      {STR(".123"), NumberBase::Enum::DEC, CharToDigit, 0, ExponentType{}, 4});
-  EXPECT_EQ(res, .123);
+  res = TryEvaluateNumber(STR("123.123   "));
+  EXPECT_EQ(res, EvaluateNumberResult(123.123, 7));
 
-  res = EvaluateNumber(
-      {STR("123."), NumberBase::Enum::DEC, CharToDigit, 3, ExponentType{}, 4});
-  EXPECT_EQ(res, 123.);
+  res = TryEvaluateNumber(STR("123.123e+10   "));
+  EXPECT_EQ(res, EvaluateNumberResult(123.123e+10, 11));
 
-  res = EvaluateNumber({STR("123.1E+1"), NumberBase::Enum::DEC, CharToDigit, 3,
-      ExponentType::PLUS, 5});
-  EXPECT_EQ(res, 123.1e+1);
+  res = TryEvaluateNumber(STR(".123e+10   "));
+  EXPECT_EQ(res, EvaluateNumberResult(.123e+10, 8));
 
-  res = EvaluateNumber({STR(".2E-3"), NumberBase::Enum::DEC, CharToDigit, 0,
-      ExponentType::MINUS, 2});
-  EXPECT_EQ(res, .2e-3);
+  res = TryEvaluateNumber(STR(".e+10   "));
+  EXPECT_FALSE(res);
 
-  res = EvaluateNumber(
-      {STR("1"), NumberBase::Enum::HEX, HexToNumber, 1, ExponentType{}, 1});
-  EXPECT_EQ(res, 0x1);
+  res = TryEvaluateNumber(STR("12.e-10   "));
+  EXPECT_EQ(res, EvaluateNumberResult(12.e-10, 7));
 
-  res = EvaluateNumber(
-      {STR("ff"), NumberBase::Enum::HEX, HexToNumber, 2, ExponentType{}, 2});
-  EXPECT_EQ(res, 0xff);
+  res = TryEvaluateNumber(STR("12.e-10 asdasd"));
+  EXPECT_EQ(res, EvaluateNumberResult(12.e-10, 7));
 
-  res = EvaluateNumber(
-      {STR("f.f"), NumberBase::Enum::HEX, HexToNumber, 1, ExponentType{}, 3});
-  EXPECT_EQ(res, 0xf.fp0);
+  res = TryEvaluateNumber(STR("0x123.e-10 asdasd"));
+  EXPECT_EQ(res, EvaluateNumberResult(0x123.ep0, 7));
 
-  res = EvaluateNumber({STR("12f.12fp+2"), NumberBase::Enum::HEX, HexToNumber,
-      3, ExponentType::PLUS, 7});
-  EXPECT_EQ(res, 0x12f.12fp2);
+  res = TryEvaluateNumber(STR("0xabcef.effp-10 asdasd"));
+  EXPECT_EQ(res, EvaluateNumberResult(0xabcef.effp-10, 15));
 
-  res = EvaluateNumber({STR("12f.12fp-2"), NumberBase::Enum::HEX, HexToNumber,
-      3, ExponentType::MINUS, 7});
-  EXPECT_EQ(res, 0x12f.12fp-2);
+  res = TryEvaluateNumber(STR("0xabcef.effp+10 asdasd"));
+  EXPECT_EQ(res, EvaluateNumberResult(0xabcef.effp+10, 15));
 
-  res = EvaluateNumber({STR(".12fp-2"), NumberBase::Enum::HEX, HexToNumber, 0,
-      ExponentType::MINUS, 4});
-  EXPECT_EQ(res, 0x.12fp-2);
+  res = TryEvaluateNumber(STR("0xabcef.effp10 asdasd"));
+  EXPECT_EQ(res, EvaluateNumberResult(0xabcef.effp10, 14));
 
-  res = EvaluateNumber({STR("12f.p-2"), NumberBase::Enum::HEX, HexToNumber, 3,
-      ExponentType::MINUS, 4});
-  EXPECT_EQ(res, 0x12f.p-2);
+  res = TryEvaluateNumber(STR("0x.effp10 asdasd"));
+  EXPECT_EQ(res, EvaluateNumberResult(0x.effp10, 9));
 }

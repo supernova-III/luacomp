@@ -20,158 +20,10 @@ EvaluateIntegerResult evaluateIntegerFromString(const char* str, size_t len,
 }
 }  // namespace
 
-double EvaluateNumber(const EvaluateNumberArgs& args) {
-  const auto [integer_part, _] = evaluateIntegerFromString(
-      args.string, args.dot_position, args.base, args.transform);
-  if (args.dot_position == args.len - 1 || args.dot_position == args.len) {
-    return integer_part;
-  }
-
-  // 123.123e12
-  // dot_pos = 3
-  // exponent_pos = 7
-  // len(123) = exponent_pos - dot_pos - 1
-  const auto fractional_part_len =
-      args.exponent_position - args.dot_position - 1;
-  double fractional_part = 0;
-  const auto [res, power] =
-      evaluateIntegerFromString(args.string + args.dot_position + 1,
-          fractional_part_len, args.base, args.transform);
-  fractional_part = res / power;
-
-  size_t next_pos = 0;
-  double sign = 1;
-  const double exponent_base = 10 - 8 * (args.base == NumberBase::Hex());
-  switch (args.exponent_type) {
-    case ExponentType::NONE: return integer_part + fractional_part;
-    case ExponentType::PLAIN: next_pos = args.exponent_position + 1; break;
-    case ExponentType::MINUS:
-    case ExponentType::PLUS: {
-      next_pos = args.exponent_position + 2;
-      sign -= 2 * (args.exponent_type == ExponentType::MINUS);
-    }
-  }
-
-  const size_t exponent_number_len = args.len - next_pos;
-  const auto [exponent_number, __] = evaluateIntegerFromString(
-      args.string + next_pos, exponent_number_len, args.base, args.transform);
-  double exponent_part = 1;
-  for (size_t i = 0; i < exponent_number; ++i) {
-    exponent_part *= exponent_base;
-  }
-
-  if (sign < 0) {
-    exponent_part = 1 / exponent_part;
-  }
-
-  return (integer_part + fractional_part) * exponent_part;
-}
-
-ScanNumberError ScanNumber(
-    const char* string, size_t len, EvaluateNumberArgs& evaluator_args) {
+EvaluateNumberResult TryEvaluateNumber(const char* string, size_t len) {
   const char* cur = string;
   auto exhausted = [&](const char* cur) { return cur - string >= len; };
-
-  auto base = NumberBase(NumberBase::Enum::DEC);
-
-  // Matching 0x or 0X
-  if (*cur == '0') {
-    ++cur;
-    if (!exhausted(cur) && (*cur == 'x' || *cur == 'X')) {
-      if (len < 3) {
-        return ScanNumberError::UNEXPECTED_END;
-      }
-      base.val = NumberBase::Enum::HEX;
-      ++cur;
-    }
-  }
-
-  evaluator_args.string = cur;
-
-  CheckingFunction checker = IsDigit;
-  CheckingFunction exponent_checker = [](char c) {
-    return c == 'e' || c == 'E';
-  };
-  if (base.val == NumberBase::Enum::HEX) {
-    checker = IsHexadecimal;
-    exponent_checker = [](char c) { return c == 'p' || c == 'P'; };
-  }
-
-  size_t integer_part_len = 0;
-  while (!exhausted(cur) && checker(*cur)) {
-    ++cur;
-    ++integer_part_len;
-  }
-
-  if (*cur == '.') {
-    evaluator_args.dot_position = cur - string;
-    ++cur;
-  }
-
-  if (exhausted(cur)) {
-    if (integer_part_len == 0) {
-      return ScanNumberError::UNEXPECTED_END;
-    }
-    evaluator_args.len = cur - string;
-    return {};
-  }
-
-  size_t fractional_part_len = 0;
-  while (!exhausted(cur) && checker(*cur)) {
-    ++cur;
-    ++fractional_part_len;
-  }
-
-  if (fractional_part_len + integer_part_len == 0) {
-    return ScanNumberError::NO_NUMBER;
-  }
-
-  if (exponent_checker(*cur)) {
-    evaluator_args.exponent_position = cur - string;
-    ++cur;
-    if (!exhausted(cur)) {
-      if (*cur == '+' || *cur == '-') {
-        evaluator_args.exponent_type = ExponentType::PLUS;
-        if (*cur == '-') {
-          evaluator_args.exponent_type = ExponentType::MINUS;
-        }
-        ++cur;
-        if (exhausted(cur)) {
-          return ScanNumberError::UNEXPECTED_END;
-        }
-      } else {
-        evaluator_args.exponent_type = ExponentType::PLAIN;
-      }
-      if (checker(*cur)) {
-        while (!exhausted(cur) && IsDigit(*cur)) {
-          ++cur;
-        }
-      } else {
-        return ScanNumberError::UNEXPECTED_END;
-      }
-    }
-  }
-  evaluator_args.len = cur - string;
-  return {};
-}
-
-double ScanEndEvaluateNumber(
-    const char* string, size_t len, ScanNumberError& error) {
-  EvaluateNumberArgs args = {};
-  error = ScanNumber(string, len, args);
-  if (error == ScanNumberError::OK) {
-    return EvaluateNumber(args);
-  }
-  return {};
-}
-
-ScanNumberError ScanNumber(
-    const char* string, size_t len, size_t& matched_substring_len) {
-  const char* cur = string;
-  auto exhausted = [&](const char* cur) { return cur - string >= len; };
-
   auto base = NumberBase::Dec();
-
   // Matching 0x or 0X
   if (*cur == '0') {
     ++cur;
@@ -188,16 +40,23 @@ ScanNumberError ScanNumber(
   CheckingFunction exponent_checker = [](char c) {
     return c == 'e' || c == 'E';
   };
+  TransformingFunction transform = CharToDigit;
   if (base == NumberBase::Hex()) {
     checker = IsHexadecimal;
     exponent_checker = [](char c) { return c == 'p' || c == 'P'; };
+    transform = HexToNumber;
   }
 
   size_t integer_part_len = 0;
+  const char* integer_part_str = cur;
   while (!exhausted(cur) && checker(*cur)) {
     ++cur;
     ++integer_part_len;
   }
+
+  const auto integer_part_result = evaluateIntegerFromString(
+      integer_part_str, integer_part_len, base, transform);
+  const double integer_part = integer_part_result.magnitude;
 
   if (*cur == '.') {
     ++cur;
@@ -207,11 +66,11 @@ ScanNumberError ScanNumber(
     if (integer_part_len == 0) {
       return ScanNumberError::UNEXPECTED_END;
     }
-    matched_substring_len = cur - string;
-    return {};
+    return EvaluateNumberResult(integer_part, cur - string);
   }
 
   size_t fractional_part_len = 0;
+  const char* fractional_part_str = cur;
   while (!exhausted(cur) && checker(*cur)) {
     ++cur;
     ++fractional_part_len;
@@ -221,15 +80,27 @@ ScanNumberError ScanNumber(
     return ScanNumberError::NO_NUMBER;
   }
 
+  const auto fractional_part_result = evaluateIntegerFromString(
+      fractional_part_str, fractional_part_len, base, transform);
+  const double fractional_part =
+      fractional_part_result.magnitude / fractional_part_result.power;
+  double exponent_part = 1;
+
   if (exponent_checker(*cur)) {
+    const size_t exponent_position = cur - string;
+    char exponent_sign = 1;
     ++cur;
     if (!exhausted(cur)) {
       if (*cur == '+' || *cur == '-') {
+        if (*cur == '-') {
+          exponent_sign = -1;
+        }
         ++cur;
         if (exhausted(cur)) {
           return ScanNumberError::UNEXPECTED_END;
         }
       }
+      const char* exponent_number_str = cur;
       if (checker(*cur)) {
         while (!exhausted(cur) && IsDigit(*cur)) {
           ++cur;
@@ -237,8 +108,23 @@ ScanNumberError ScanNumber(
       } else {
         return ScanNumberError::UNEXPECTED_END;
       }
+      size_t exponent_number_len = cur - exponent_number_str;
+      if (exponent_number_len == 0) {
+        return ScanNumberError::UNEXPECTED_END;
+      }
+      const double exponent_number =
+          evaluateIntegerFromString(exponent_number_str, exponent_number_len,
+              NumberBase::Dec(), CharToDigit)
+              .magnitude;
+      const double exponent_base = 10 - 8 * (base == NumberBase::Hex());
+      for (size_t i = 0; i < static_cast<size_t>(exponent_number); ++i) {
+        exponent_part *= exponent_base;
+      }
+      if (exponent_sign == -1) {
+        exponent_part = 1 / exponent_part;
+      }
     }
   }
-  matched_substring_len = cur - string;
-  return {};
+  const auto number = (integer_part + fractional_part) * exponent_part;
+  return EvaluateNumberResult(number, cur - string);
 }
