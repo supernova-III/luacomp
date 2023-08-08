@@ -459,85 +459,28 @@ void TokenIterator::nextToken() {
           }
         }
 
-        /*
-        if (IsDigit(c)) {
-          scanString(IsDigit);
-          c = peekCharacter();
-          if (c == 'E' || c == 'e') {
-            c = nextCharacter();
-            if (c == '+' || c == '-') {
-              c = nextCharacter();
-            }
-            if (IsDigit(c)) {
-              scanString(IsDigit);
-            } else {
-              unexpectedCharacter();
-            }
-          }
-          const size_t number_string_len = input_ + current_input_pos_ - start;
-          current_token_.type = TOKEN_NUMBER;
-          current_token_.value.number =
-              EvaluateNumber(start, number_string_len);
-        }
-        */
-
         if (isDigit(c)) {
-          const auto [str, len] = scanString(isDigit);
-          const auto [magnitude, power_of_ten] = scanInteger(str, len, 10);
-          double result = magnitude / power_of_ten;
-          c = peekCharacter();
-          if (c == 'E' || c == 'e') {
-            result *= recognizeExponent(isDigit, 10);
-          }
           current_token_.type = TOKEN_NUMBER;
-          current_token_.value.number = result;
+          const auto res = TryEvaluateNumber(input_ + current_input_pos_ - 1,
+              input_size_ - current_input_pos_ + 1);
+          if (res) {
+            current_token_.value.number = res.number;
+            current_input_pos_ += res.len;
+            return;
+          } else {
+          }
         }
         return;
       }
       case LUACOMP_DIGIT_CHAR: {
         current_token_.type = TOKEN_NUMBER;
-        double base = 10;
-        if (c == '0') {
-          c = nextCharacter();
-          if (current_input_pos_ == input_size_) {
-            current_token_.value.number = 0;
-            return;
-          }
-          if (c == 'x' || c == 'X') {
-            base = 16;
-            c = nextCharacter();
-          }
+        const auto res = TryEvaluateNumber(
+            input_ + current_input_pos_, input_size_ - current_input_pos_);
+        if (res) {
+          current_token_.value.number = res.number;
+          current_input_pos_ += res.len;
+        } else {
         }
-
-        // Here the current char position points to the character right after 0x
-        // (0X) in case of base = 16, otherwise the leading zero is just skipped
-        // and it has no effect on the result
-
-        auto checker = base == 10 ? isDigit : isHexadecimal;
-        const auto [str, len] = scanString(checker);
-        const auto [number, _] = scanInteger(str, len, base);
-        double result = number;
-        c = peekCharacter();
-        if (c == '.') {
-          c = nextCharacter();
-          if (checker(c)) {
-            const auto [str, len] = scanString(checker);
-            const auto [number, magnitude] = scanInteger(str, len, base);
-            result += number / magnitude;
-          }
-        }
-        c = peekCharacter();
-        if (c == 'E' || c == 'e' || c == 'p' || c == 'P') {
-          double exp_base = 10;
-          if (c == 'p' || c == 'P') {
-            if (base == 10) unexpectedCharacter();
-            exp_base = 2;
-          }
-          result *= recognizeExponent(checker, exp_base);
-        }
-
-        current_token_.value.number = result;
-
         return;
       }
       case LUACOMP_SPECIAL_CHAR: {
