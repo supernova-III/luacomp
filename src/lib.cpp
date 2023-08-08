@@ -1,5 +1,6 @@
 #include "lib.hh"
 #include <cstdlib>
+#include <cstring>
 
 #define FORMAT_MESSAGE(format, what, szvar)                 \
   va_list args;                                             \
@@ -74,4 +75,55 @@ void PoolAllocator::reallocateCurrentPool(size_t size_hint) {
     throw RuntimeError("Not enough memory to allocate memory pool");
   }
   header->capacity = new_capacity;
+}
+
+StringTable::Node* StringTable::allocateStringNode(
+    const char* str, size_t len) {
+  const size_t size = len + 1 + sizeof(Node) - sizeof(Node::string);
+  auto res = reinterpret_cast<Node*>(allocator_.Allocate(size));
+  memcpy(res->string, str, len);
+  res->string[len] = 0;
+  return res;
+}
+
+StringTable::StringTable(size_t capacity) : capacity_(capacity) {
+  auto memory = calloc(capacity, sizeof(Node*));
+  if (!memory) {
+    throw RuntimeError("Cannot allocate buckets");
+  }
+  buckets_ = reinterpret_cast<Node**>(memory);
+}
+
+const char* StringTable::InsertString(const char* string, size_t len) {
+  const double current_load_factor = static_cast<double>(size_) / capacity_;
+  if (current_load_factor >= max_load_factor_) {
+    const size_t new_capacity = 2 * capacity_;
+    auto new_memory = realloc(buckets_, new_capacity);
+    if (!new_memory) {
+      throw RuntimeError("Cannot reallocate buckets");
+    }
+    buckets_ = reinterpret_cast<Node**>(new_memory);
+  }
+
+  const auto idx = hasher_(string, len) % size_;
+  auto node = buckets_[idx];
+  if (!node) {
+    auto new_node = allocateStringNode(string, len);
+    buckets_[idx] = new_node;
+    ++size_;
+  } else {
+    if (node->prev) {
+      auto cur = node;
+      while (cur->prev) {
+        if (cur->len == len && !strncmp(cur->string, string, len)) {
+          return cur->string;
+        }
+        cur = cur->prev;
+      }
+    }
+    auto new_node = allocateStringNode(string, len);
+    new_node->prev = node;
+    buckets_[idx] = new_node;
+  }
+  return buckets_[idx]->string;
 }

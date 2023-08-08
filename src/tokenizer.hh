@@ -1,6 +1,4 @@
 #pragma once
-#include <unordered_set>
-#include <string>
 
 // Function that transforms a character into a digit
 using TransformingFunction = double (*)(char);
@@ -125,7 +123,7 @@ class TokenIterator {
   // Last scanned token
   Token current_token_ = {};
 
-  std::unordered_set<std::string> string_table_;
+  StringTable string_table_;
 
  public:
   // Should be used to create tokenizer for an input string.

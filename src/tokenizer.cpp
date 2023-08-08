@@ -277,7 +277,10 @@ LuaTokenType recognizeKeywordsWithTable(const char* str, size_t len) {
 
 TokenIterator::TokenIterator(
     const char* input_name, const char* input, size_t size)
-    : input_(input), input_name_(input_name), input_size_(size) {}
+    : input_(input),
+      input_name_(input_name),
+      input_size_(size),
+      string_table_(128) {}
 
 TokenIterator::operator bool() const {
   return current_token_.type != TOKEN_END_OF_STREAM;
@@ -485,14 +488,21 @@ void TokenIterator::nextToken() {
       }
       case LUACOMP_SPECIAL_CHAR: {
         recognizeTokensWithTable();
-        return;
+        if (current_token_.type == TOKEN_COMMENT) {
+          while (input_[++current_input_pos_] != '\n' &&
+                 current_input_pos_ < input_size_)
+            ;
+        } else {
+          return;
+        }
       }
       case LUACOMP_ALPHA_CHAR: {
         const auto [str, len] = scanString(isKeywordCharacter);
         LuaTokenType token_type = recognizeKeywordsWithTable(str, len);
         current_token_.type = token_type;
         if (token_type == TOKEN_IDENTIFIER) {
-          string_table_.insert(std::string(str, len));
+          const auto string = string_table_.InsertString(str, len);
+          current_token_.value.identifier = string;
         }
         return;
       }
