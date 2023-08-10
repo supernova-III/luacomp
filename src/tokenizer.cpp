@@ -336,9 +336,8 @@ void TokenIterator::recognizeTokensWithTable() {
       STENTRY0(TOKEN_MOD), STENTRY0(TOKEN_BXOR), STENTRY0(TOKEN_DASH),
       STENTRY0(TOKEN_AT), STENTRY0(TOKEN_BOR), STENTRY0(TOKEN_LEFT_PAREN),
       STENTRY0(TOKEN_RIGHT_PAREN), STENTRY0(TOKEN_LEFT_BRACE),
-      STENTRY0(TOKEN_RIGHT_BRACE), STENTRY0(TOKEN_LEFT_BRACKET),
-      STENTRY0(TOKEN_RIGHT_BRACKET), STENTRY0(TOKEN_SEMICOLON),
-      STENTRY0(TOKEN_COMMA)};
+      STENTRY0(TOKEN_RIGHT_BRACE), STENTRY0(TOKEN_SEMICOLON),
+      STENTRY0(TOKEN_COMMA), STENTRY0(TOKEN_RIGHT_BRACKET)};
 
   size_t table_index = TOKEN_DIVIDE;
   switch (peekCharacter()) {
@@ -359,10 +358,9 @@ void TokenIterator::recognizeTokensWithTable() {
     case ')': table_index = TOKEN_RIGHT_PAREN; break;
     case '{': table_index = TOKEN_LEFT_BRACE; break;
     case '}': table_index = TOKEN_RIGHT_BRACE; break;
-    case '[': table_index = TOKEN_LEFT_BRACKET; break;
-    case ']': table_index = TOKEN_RIGHT_BRACKET; break;
     case ';': table_index = TOKEN_SEMICOLON; break;
     case ',': table_index = TOKEN_COMMA; break;
+    case ']': table_index = TOKEN_RIGHT_BRACKET; break;
   }
 
   const auto &entry = scanner_table[table_index];
@@ -447,6 +445,38 @@ void TokenIterator::nextToken() {
     char c = input_[current_input_pos_];
 
     switch (c) {
+      case '[': {
+        const char *start = input_ + current_input_pos_;
+        const auto next_index = current_input_pos_ + 1;
+        if (next_index < input_size_) {
+          if (input_[next_index] != '[') {
+            current_token_.type = TOKEN_LEFT_BRACKET;
+          }
+          current_input_pos_ += 2;
+        } else {
+          throw RuntimeError("Unexpected EOF");
+        }
+
+        while (current_input_pos_ < input_size_ &&
+               input_[current_input_pos_] != ']') {
+          ++current_input_pos_;
+        }
+
+        if (current_input_pos_ + 1 < input_size_) {
+          ++current_input_pos_;
+          if (input_[current_input_pos_] == ']') {
+            current_token_.type = TOKEN_LONG_STRING_LITERAL;
+            const char *new_string = string_table_.InsertString(
+                start + 2, input_ + current_input_pos_ - start - 3);
+            current_token_.value.string_literal = new_string;
+            ++current_input_pos_;
+            return;
+          }
+        }
+
+        unexpectedCharacter();
+
+      } break;
       case '"':
       case '\'': {
         const char *start = input_ + current_input_pos_;
@@ -457,8 +487,7 @@ void TokenIterator::nextToken() {
         }
 
         if (input_[current_input_pos_] != c) {
-          throw RuntimeError(
-              "Unexpected EOF: incomplete string literal %s", start);
+          unexpectedCharacter();
         }
         ++current_input_pos_;
 
