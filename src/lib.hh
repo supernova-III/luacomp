@@ -67,7 +67,10 @@ class StringTable {
   struct Node {
     Node *prev;
     size_t len;
-    char *string;
+    char string;
+
+    char *GetStringToModify() { return &string; }
+    const char *GetString() const { return &string; }
   };
 
   PoolAllocator allocator_ = {};

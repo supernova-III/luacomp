@@ -81,8 +81,9 @@ StringTable::Node* StringTable::allocateStringNode(
     const char* str, size_t len) {
   const size_t size = len + 1 + sizeof(Node) - sizeof(Node::string);
   auto res = reinterpret_cast<Node*>(allocator_.Allocate(size));
-  memcpy(res->string, str, len);
-  res->string[len] = 0;
+  memcpy(res->GetStringToModify(), str, len);
+  res->GetStringToModify()[len] = 0;
+  res->len = len;
   return res;
 }
 
@@ -105,7 +106,7 @@ const char* StringTable::InsertString(const char* string, size_t len) {
     buckets_ = reinterpret_cast<Node**>(new_memory);
   }
 
-  const auto idx = hasher_(string, len) % size_;
+  const auto idx = hasher_(string, len) % capacity_;
   auto node = buckets_[idx];
   if (!node) {
     auto new_node = allocateStringNode(string, len);
@@ -115,8 +116,8 @@ const char* StringTable::InsertString(const char* string, size_t len) {
     if (node->prev) {
       auto cur = node;
       while (cur->prev) {
-        if (cur->len == len && !strncmp(cur->string, string, len)) {
-          return cur->string;
+        if (cur->len == len && !strncmp(cur->GetString(), string, len)) {
+          return cur->GetString();
         }
         cur = cur->prev;
       }
@@ -125,5 +126,5 @@ const char* StringTable::InsertString(const char* string, size_t len) {
     new_node->prev = node;
     buckets_[idx] = new_node;
   }
-  return buckets_[idx]->string;
+  return buckets_[idx]->GetString();
 }
