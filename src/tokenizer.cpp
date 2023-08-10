@@ -294,6 +294,7 @@ TokenIterator &TokenIterator::operator++() {
 const Token &TokenIterator::operator*() const {
   return current_token_;
 }
+
 char TokenIterator::nextCharacter() {
   return input_[++current_input_pos_];
 }
