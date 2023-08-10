@@ -52,7 +52,7 @@ void PoolAllocator::allocatePool(size_t capacity) {
     throw RuntimeError("Memory pools number limit exceeded");
   }
   const size_t allocation_size = sizeof(PoolHeader) + capacity;
-  auto header = reinterpret_cast<PoolHeader*>(malloc(allocation_size));
+  auto header = reinterpret_cast<PoolHeader*>(calloc(1, allocation_size));
   if (!header) {
     throw RuntimeError("Not enough memory to allocate memory pool");
   }
@@ -113,14 +113,12 @@ const char* StringTable::InsertString(const char* string, size_t len) {
     buckets_[idx] = new_node;
     ++size_;
   } else {
-    if (node->prev) {
-      auto cur = node;
-      while (cur->prev) {
-        if (cur->len == len && !strncmp(cur->GetString(), string, len)) {
-          return cur->GetString();
-        }
-        cur = cur->prev;
+    auto cur = node;
+    while (cur != nullptr) {
+      if (cur->len == len && !strncmp(cur->GetString(), string, len)) {
+        return cur->GetString();
       }
+      cur = cur->prev;
     }
     auto new_node = allocateStringNode(string, len);
     new_node->prev = node;

@@ -94,7 +94,7 @@ struct EvaluateIntegerResult {
   double power;
 };
 
-EvaluateIntegerResult evaluateIntegerFromString(const char* str, size_t len,
+EvaluateIntegerResult evaluateIntegerFromString(const char *str, size_t len,
     NumberBase base, TransformingFunction transform) {
   double magnitude = 0;
   double power_of_base = 1;
@@ -107,9 +107,9 @@ EvaluateIntegerResult evaluateIntegerFromString(const char* str, size_t len,
 }
 }  // namespace
 
-EvaluateNumberResult TryEvaluateNumber(const char* string, size_t len) {
-  const char* cur = string;
-  auto exhausted = [&](const char* cur) { return cur - string >= len; };
+EvaluateNumberResult TryEvaluateNumber(const char *string, size_t len) {
+  const char *cur = string;
+  auto exhausted = [&](const char *cur) { return cur - string >= len; };
   auto base = NumberBase::Dec();
   // Matching 0x or 0X
   if (*cur == '0') {
@@ -135,7 +135,7 @@ EvaluateNumberResult TryEvaluateNumber(const char* string, size_t len) {
   }
 
   size_t integer_part_len = 0;
-  const char* integer_part_str = cur;
+  const char *integer_part_str = cur;
   while (!exhausted(cur) && checker(*cur)) {
     ++cur;
     ++integer_part_len;
@@ -157,7 +157,7 @@ EvaluateNumberResult TryEvaluateNumber(const char* string, size_t len) {
   }
 
   size_t fractional_part_len = 0;
-  const char* fractional_part_str = cur;
+  const char *fractional_part_str = cur;
   while (!exhausted(cur) && checker(*cur)) {
     ++cur;
     ++fractional_part_len;
@@ -187,7 +187,7 @@ EvaluateNumberResult TryEvaluateNumber(const char* string, size_t len) {
           return ScanNumberError::UNEXPECTED_END;
         }
       }
-      const char* exponent_number_str = cur;
+      const char *exponent_number_str = cur;
       if (checker(*cur)) {
         while (!exhausted(cur) && isDigit(*cur)) {
           ++cur;
@@ -224,7 +224,7 @@ inline constexpr size_t idx(char c) {
 class KeywordsTable {
   struct TableEntry {
     struct Tok {
-      const char* str;
+      const char *str;
       size_t len;
       LuaTokenType token;
     };
@@ -254,7 +254,7 @@ class KeywordsTable {
     KWTABLE_ENTRY(w, "while", TOKEN_WHILE);
   }
 
-  const auto& operator[](char c) const { return trie_[idx(c)]; }
+  const auto &operator[](char c) const { return trie_[idx(c)]; }
 };
 
 #undef VAR
@@ -262,11 +262,11 @@ class KeywordsTable {
 #undef KWTABLE_ENTRY2
 #undef KWTABLE_ENTRY3
 
-LuaTokenType recognizeKeywordsWithTable(const char* str, size_t len) {
+LuaTokenType recognizeKeywordsWithTable(const char *str, size_t len) {
   static constinit auto trie = KeywordsTable();
-  const auto& entry = trie[*str];
+  const auto &entry = trie[*str];
   for (size_t i = 0; i < entry.size; ++i) {
-    const auto& [tok_str, tok_len, tok] = entry.variants[i];
+    const auto &[tok_str, tok_len, tok] = entry.variants[i];
     if (tok_len == len && !strncmp(tok_str, str, len)) {
       return tok;
     }
@@ -276,7 +276,7 @@ LuaTokenType recognizeKeywordsWithTable(const char* str, size_t len) {
 }  // namespace
 
 TokenIterator::TokenIterator(
-    const char* input_name, const char* input, size_t size)
+    const char *input_name, const char *input, size_t size)
     : input_(input),
       input_name_(input_name),
       input_size_(size),
@@ -286,12 +286,12 @@ TokenIterator::operator bool() const {
   return current_token_.type != TOKEN_END_OF_STREAM;
 }
 
-TokenIterator& TokenIterator::operator++() {
+TokenIterator &TokenIterator::operator++() {
   nextToken();
   return *this;
 }
 
-const Token& TokenIterator::operator*() const {
+const Token &TokenIterator::operator*() const {
   return current_token_;
 }
 char TokenIterator::nextCharacter() {
@@ -365,7 +365,7 @@ void TokenIterator::recognizeTokensWithTable() {
     case ',': table_index = TOKEN_COMMA; break;
   }
 
-  const auto& entry = scanner_table[table_index];
+  const auto &entry = scanner_table[table_index];
   char c = nextCharacter();
   for (size_t i = 0; i < entry.size; ++i) {
     if (c == entry.pairs[i].c) {
@@ -397,7 +397,7 @@ struct ScanIntegerResult {
   double power_of_base;
 };
 
-ScanIntegerResult scanInteger(const char* str, size_t len, double base) {
+ScanIntegerResult scanInteger(const char *str, size_t len, double base) {
   auto transform = base == 10 ? charToDigit : hexToNumber;
   double magnitude = 0;
   double power_of_base = 1;
@@ -447,8 +447,28 @@ void TokenIterator::nextToken() {
     char c = input_[current_input_pos_];
 
     switch (c) {
+      case '"':
+      case '\'': {
+        const char *start = input_ + current_input_pos_;
+        ++current_input_pos_;
+        while (current_input_pos_ < input_size_ &&
+               input_[current_input_pos_] != c) {
+          ++current_input_pos_;
+        }
+
+        if (input_[current_input_pos_] != c) {
+          throw RuntimeError(
+              "Unexpected EOF: incomplete string literal %s", start);
+        }
+        ++current_input_pos_;
+
+        const size_t len = input_ + current_input_pos_ - start - 2;
+        const char *string = string_table_.InsertString(start + 1, len);
+        current_token_.type = TOKEN_SHORT_STRING_LITERAL;
+        current_token_.value.string_literal = string;
+        return;
+      } break;
       case '.': {
-        const char* start = input_;
         current_token_.type = TOKEN_PERIOD;
         c = nextCharacter();
         if (c == '.') {
