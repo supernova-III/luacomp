@@ -15,7 +15,7 @@ int main(int argc, char* argv[]) try {
   }
   const auto data = std::vector<char>(std::istreambuf_iterator<char>(file), {});
 
-  auto iter = TokenIterator(argv[1], data.data(), data.size());
+  auto iter = TokenIterator1(argv[1], String(data.data(), data.size()));
   while (++iter) {
     auto current = *iter;
   }

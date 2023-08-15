@@ -1,0 +1,5 @@
+{
+    "C_Cpp.formatting": "clangFormat",
+    "C_Cpp.workspaceSymbols": "All",
+    "editor.tabSize": 2
+}

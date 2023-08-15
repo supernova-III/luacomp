@@ -29,28 +29,28 @@ struct EvaluateNumberResult {
 EvaluateNumberResult TryEvaluateNumber(const char* string, size_t len);
 
 enum LuaTokenType : uint32_t {
-  TOKEN_DIVIDE,         // ok
-  TOKEN_BNOT,           // ok
-  TOKEN_LESS,           // ok
-  TOKEN_BIGGER,         // ok
-  TOKEN_ASSIGN,         // ok
-  TOKEN_COLON,          // ok
-  TOKEN_PLUS,           // ok
-  TOKEN_MINUS,          // ok
-  TOKEN_ASTERISK,       // ok
-  TOKEN_MOD,            // ok
-  TOKEN_BXOR,           // ok
-  TOKEN_DASH,           // ok
-  TOKEN_AT,             // ok
-  TOKEN_BOR,            // ok
-  TOKEN_LEFT_PAREN,     // ok
-  TOKEN_RIGHT_PAREN,    // ok
-  TOKEN_LEFT_BRACE,     // ok
-  TOKEN_RIGHT_BRACE,    // ok
-  TOKEN_SEMICOLON,      // ok
-  TOKEN_COMMA,          // ok
-  TOKEN_RIGHT_BRACKET,  // ok
-  TOKEN_LEFT_BRACKET,   // ok
+  TOKEN_DIVIDE,
+  TOKEN_BNOT,
+  TOKEN_LESS,
+  TOKEN_BIGGER,
+  TOKEN_ASSIGN,
+  TOKEN_COLON,
+  TOKEN_PLUS,
+  TOKEN_MINUS,
+  TOKEN_ASTERISK,
+  TOKEN_MOD,
+  TOKEN_BXOR,
+  TOKEN_DASH,
+  TOKEN_AT,
+  TOKEN_BOR,
+  TOKEN_LEFT_PAREN,
+  TOKEN_RIGHT_PAREN,
+  TOKEN_LEFT_BRACE,
+  TOKEN_RIGHT_BRACE,
+  TOKEN_SEMICOLON,
+  TOKEN_COMMA,
+  TOKEN_RIGHT_BRACKET,
+  TOKEN_LEFT_BRACKET,
   TOKEN_AND,
   TOKEN_BREAK,
   TOKEN_DO,
@@ -73,18 +73,18 @@ enum LuaTokenType : uint32_t {
   TOKEN_TRUE,
   TOKEN_UNTIL,
   TOKEN_WHILE,
-  TOKEN_COLON_COLON,   // ok
-  TOKEN_BLEFT,         // ok
-  TOKEN_BRIGHT,        // ok
-  TOKEN_DIV,           // ok
-  TOKEN_EQUALS,        // ok
-  TOKEN_BNOT_ASSIGN,   // ok
-  TOKEN_LESS_EQUAL,    // ok
-  TOKEN_BIGGER_EQUAL,  // ok
-  TOKEN_PERIOD,        // ok
-  TOKEN_2PERIOD,       // ok
-  TOKEN_3PERIOD,       // ok
-  TOKEN_COMMENT,       // ok
+  TOKEN_COLON_COLON,
+  TOKEN_BLEFT,
+  TOKEN_BRIGHT,
+  TOKEN_DIV,
+  TOKEN_EQUALS,
+  TOKEN_BNOT_ASSIGN,
+  TOKEN_LESS_EQUAL,
+  TOKEN_BIGGER_EQUAL,
+  TOKEN_PERIOD,
+  TOKEN_2PERIOD,
+  TOKEN_3PERIOD,
+  TOKEN_COMMENT,
   TOKEN_LONG_STRING_LITERAL,
   TOKEN_SHORT_STRING_LITERAL,
 
@@ -96,7 +96,8 @@ enum LuaTokenType : uint32_t {
   // clang-format on
   TOKEN_NUMBER,
   TOKEN_IDENTIFIER,
-  TOKEN_END_OF_STREAM  // ok
+  TOKEN_END_OF_STREAM,
+  TOKEN_INVALID
 };
 
 struct Token {
@@ -106,6 +107,34 @@ struct Token {
     const char* string_literal;
     double number;
   } value;
+};
+
+// Iterates over provided string, recognizing tokens. It's not assumed to store
+// all recognized tokens, just the last one.
+class TokenIterator1 {
+  // The input stream
+  String input_;
+  // Iterator over the input string
+  StringIterator input_iter_;
+  // Input stream name (usually means source file name)
+  const char* input_name_;
+  // Current line number in the input stream
+  size_t line_number_ = 0;
+  // Last recognized token
+  Token current_token_;
+  // Table for interning identifiers
+  StringTable string_table_;
+
+ public:
+  TokenIterator1(const char* input_name, String input);
+
+  // Scans for the next token
+  const TokenIterator1& operator++();
+  // Peeks the latest recognized token
+  const Token& operator*() const noexcept;
+  // Returns true if tokenization is not yet finished and there are no errors,
+  // false otherwise
+  operator bool() const noexcept;
 };
 
 // Iterates over provided string, scanning tokens. It doesn't store tokens, it
@@ -128,10 +157,6 @@ class TokenIterator {
  public:
   // Should be used to create tokenizer for an input string.
   TokenIterator(const char* input_name, const char* input, size_t size);
-
-  // When the input string exhausted, this function can be used to provide
-  // another string to tokenize
-  void UpdateInput(const char* new_input);
 
   // Scan for the next token
   TokenIterator& operator++();

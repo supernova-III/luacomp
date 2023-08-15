@@ -63,6 +63,63 @@ class PoolAllocator {
 
 using StringHashFunction = size_t (*)(const char *string, size_t len);
 
+struct String {
+  const char *data;
+  size_t len;
+
+  constexpr String(const char *string, size_t len) noexcept
+      : data(string), len(len) {}
+  // constructor for c-strings
+  String(const char *c_string) noexcept
+      : data(c_string), len(strlen(c_string)) {}
+  String() = default;
+  // Assign operator for c-strings
+  String &operator=(const char *c_string) noexcept;
+  // comparison with c-strings
+  bool operator==(const char *c_string) const noexcept;
+  // comparison with String
+  bool operator==(const String &other) const noexcept;
+  // returns character at index
+  char operator[](size_t index) const noexcept;
+};
+
+class StringIterator {
+  size_t pos_;
+  String &string_;
+
+ public:
+  StringIterator(String &string) noexcept : string_(string), pos_() {}
+
+  // Peeks current element
+  char Peek() const noexcept;
+
+  // Checks if an iterator is valid. An iterator is valid if its pos if less
+  // than the length of a string it iterates over.
+  operator bool() const noexcept;
+
+  // Returns a string which is a difference between two iterators. For example,
+  // if we have a string abcdef and it1 points to c, and it2 points to f, the
+  // difference is cde.
+  String operator-(const StringIterator &other) const;
+
+  // Keeps iterating until the target character met. Increments iterator first.
+  // Returns true if the target character met, false otherwise
+  bool IterateTo(char target) noexcept;
+
+  template <typename F>
+  void IterateWhile(F f) noexcept {
+    for (auto c = Next(); !!(*this) && f(c); c = Next())
+      ;
+  }
+
+  // Returns next character or 0 if the end of the string reached
+  char Next() noexcept;
+
+ private:
+  // Increments iterator
+  StringIterator &increment() noexcept;
+};
+
 class StringTable {
   struct Node {
     Node *prev;
@@ -94,6 +151,7 @@ class StringTable {
   StringTable(size_t capacity);
 
   const char *InsertString(const char *string, size_t len);
+  const char *Insert(const String &string);
 
  private:
   Node *allocateStringNode(const char *str, size_t len);

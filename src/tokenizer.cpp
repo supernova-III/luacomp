@@ -2,7 +2,7 @@
 #include "lib.hh"
 
 #define VAR(str, tok) \
-  { str, sizeof(str) - 1, tok }
+  { String{str, sizeof(str) - 1}, tok }
 #define KWTABLE_ENTRY3(c, v0, t0, v1, t1, v2, t2) \
   trie_[idx(#@ c)] = {                            \
       .size = 3, .variants = {VAR(v0, t0), VAR(v1, t1), VAR(v2, t2)}}
@@ -14,12 +14,12 @@
   trie_[idx(#@ c)] = {.size = 1, .variants = {VAR(v, t)}}
 
 // clang-format off
-#define LUACOMP_SPECIAL_CHAR\
+#define LUACOMP_TOKEN\
   '+' : case '*': case '%': case '#': case '&': case '|': \
   case '(': case ')': case '{': case '}': case ']': \
   case ';': case ',':\
   case '/' : case '~': case '<': case '>': \
-  case '=': case ':'
+  case '=': case ':': case '-'
 
 #define LUACOMP_ALPHA_CHAR 'a' : case 'b': case 'c': case 'd': case 'e': case 'f':\
   case 'g': case 'h': case 'i': case 'j': case 'k': case 'l':\
@@ -221,11 +221,16 @@ inline constexpr size_t idx(char c) {
   return c - 'a';
 }
 
+// Keywords table that powers table-driven scanning of keywords. Implements a
+// trie. In this case this is actually a hash table with predefined number of
+// collisions and extremely cheap hash function that calculates a hash in a
+// single op. So this is also near to ideal hash table
 class KeywordsTable {
+  // The table consist of list of entries. Each entry is a list of possible
+  // keywords starting with specific letter
   struct TableEntry {
     struct Tok {
-      const char *str;
-      size_t len;
+      String string;
       LuaTokenType token;
     };
     size_t size = 0;
@@ -236,38 +241,33 @@ class KeywordsTable {
 
  public:
   consteval KeywordsTable() {
-    KWTABLE_ENTRY(a, "and", TOKEN_AND);
-    KWTABLE_ENTRY(b, "break", TOKEN_BREAK);
-    KWTABLE_ENTRY(d, "do", TOKEN_DO);
-    KWTABLE_ENTRY3(
-        e, "else", TOKEN_ELSE, "elseif", TOKEN_ELSEIF, "end", TOKEN_END);
-    KWTABLE_ENTRY3(
-        f, "false", TOKEN_FALSE, "for", TOKEN_FOR, "function", TOKEN_FUNCTION);
-    KWTABLE_ENTRY(g, "goto", TOKEN_GOTO);
+    // clang-format off
+    KWTABLE_ENTRY (a, "and", TOKEN_AND);
+    KWTABLE_ENTRY (b, "break", TOKEN_BREAK);
+    KWTABLE_ENTRY (d, "do", TOKEN_DO);
+    KWTABLE_ENTRY3(e, "else", TOKEN_ELSE, "elseif", TOKEN_ELSEIF, "end", TOKEN_END);
+    KWTABLE_ENTRY3(f, "false", TOKEN_FALSE, "for", TOKEN_FOR, "function", TOKEN_FUNCTION);
+    KWTABLE_ENTRY (g, "goto", TOKEN_GOTO);
     KWTABLE_ENTRY2(i, "if", TOKEN_IF, "in", TOKEN_IN);
-    KWTABLE_ENTRY(l, "local", TOKEN_LOCAL);
+    KWTABLE_ENTRY (l, "local", TOKEN_LOCAL);
     KWTABLE_ENTRY2(n, "nil", TOKEN_NIL, "not", TOKEN_NOT);
-    KWTABLE_ENTRY(o, "or", TOKEN_OR);
+    KWTABLE_ENTRY (o, "or", TOKEN_OR);
     KWTABLE_ENTRY2(r, "repeat", TOKEN_REPEAT, "return", TOKEN_RETURN);
     KWTABLE_ENTRY2(t, "then", TOKEN_THEN, "true", TOKEN_TRUE);
-    KWTABLE_ENTRY(u, "until", TOKEN_UNTIL);
-    KWTABLE_ENTRY(w, "while", TOKEN_WHILE);
+    KWTABLE_ENTRY (u, "until", TOKEN_UNTIL);
+    KWTABLE_ENTRY (w, "while", TOKEN_WHILE);
+    // clang-format on
   }
 
-  const auto &operator[](char c) const { return trie_[idx(c)]; }
+  // Looks up for a keyword. It looks just like a simple hash table lookup.
+  LuaTokenType operator[](const String &string) const noexcept;
 };
 
-#undef VAR
-#undef KWTABLE_ENTRY
-#undef KWTABLE_ENTRY2
-#undef KWTABLE_ENTRY3
-
-LuaTokenType recognizeKeywordsWithTable(const char *str, size_t len) {
-  static constinit auto trie = KeywordsTable();
-  const auto &entry = trie[*str];
+LuaTokenType KeywordsTable::operator[](const String &string) const noexcept {
+  const TableEntry &entry = trie_[idx(string[0])];
   for (size_t i = 0; i < entry.size; ++i) {
-    const auto &[tok_str, tok_len, tok] = entry.variants[i];
-    if (tok_len == len && !strncmp(tok_str, str, len)) {
+    const auto &[variant_string, tok] = entry.variants[i];
+    if (variant_string == string) {
       return tok;
     }
   }
@@ -303,16 +303,101 @@ char TokenIterator::peekCharacter() {
   return input_[current_input_pos_];
 }
 
-void TokenIterator::recognizeTokensWithTable() {
-  struct CharTokenPair {
-    char c;
-    LuaTokenType t;
-  };
-  struct ScannerTableEntry {
+#define TTENTRY0(trie, mt) trie[mt] = {.main_type = mt}
+#define TTENTRY1(trie, mt, c0, t0) \
+  trie[mt] = {.main_type = mt, .size = 1, .variants = {{.c = c0, .t = t0}}}
+#define TTENTRY2(trie, mt, c1, t1, c2, t2) \
+  trie[mt] = {.main_type = mt,             \
+      .size = 2,                           \
+      .variants = {{.c = c1, .t = t1}, {.c = c2, .t = t2}}}
+
+// Token table that powers table-driven scanning of simple tokens like ~ , < >
+// <= and so on. Implements a trie, a near to hash table structure. Provides
+// operator[] to look up an entry
+class TokenTable {
+  // The table consist of entries. Each entry represents one token or several
+  // variants of tokens, based on the first character. For example, if the
+  // tokenizer meets '<' in the source code, it has two variants of what token
+  // could be scanned: '<' or '<='. In this case we call '<' the main character
+  // and the type of token it represents, TOKEN_LESS is the main token type.
+  // Depending on which character goes next, we could have other variants, like
+  // <=
+  struct Entry {
+    // Main token type, like if the next character doesn't compose with the
+    // current one, making some token
     LuaTokenType main_type;
+    // Actual number of variants
     size_t size;
-    CharTokenPair pairs[2];
+    // List of variants of tokens based on the main type. For example, if we
+    // have '<' as a main character and the next character is '=', then
+    // TOKEN_LESS_EQUAL is the actual token type, and pair ('=',
+    // TOKEN_LESS_EQUAL) is a variant. I put max number of variants as 2 because
+    // it's lua and there are no more than 2 additional variants
+    struct {
+      // Next character after the main character
+      char c;
+      // Token type that next and main character compose to
+      LuaTokenType t;
+    } variants[2];
   };
+
+  Entry trie_[TOKEN_LEFT_BRACKET];
+
+  size_t idx(char c) const noexcept {
+    switch (c) {
+      case '~': return static_cast<size_t>(TOKEN_BNOT);
+      case '<': return static_cast<size_t>(TOKEN_LESS);
+      case '>': return static_cast<size_t>(TOKEN_BIGGER);
+      case '=': return static_cast<size_t>(TOKEN_ASSIGN);
+      case ':': return static_cast<size_t>(TOKEN_COLON);
+      case '+': return static_cast<size_t>(TOKEN_PLUS);
+      case '-': return static_cast<size_t>(TOKEN_MINUS);
+      case '*': return static_cast<size_t>(TOKEN_ASTERISK);
+      case '%': return static_cast<size_t>(TOKEN_MOD);
+      case '^': return static_cast<size_t>(TOKEN_BXOR);
+      case '#': return static_cast<size_t>(TOKEN_DASH);
+      case '&': return static_cast<size_t>(TOKEN_AT);
+      case '|': return static_cast<size_t>(TOKEN_BOR);
+      case '(': return static_cast<size_t>(TOKEN_LEFT_PAREN);
+      case ')': return static_cast<size_t>(TOKEN_RIGHT_PAREN);
+      case '{': return static_cast<size_t>(TOKEN_LEFT_BRACE);
+      case '}': return static_cast<size_t>(TOKEN_RIGHT_BRACE);
+      case ';': return static_cast<size_t>(TOKEN_SEMICOLON);
+      case ',': return static_cast<size_t>(TOKEN_COMMA);
+      case ']': return static_cast<size_t>(TOKEN_RIGHT_BRACKET);
+    }
+    return 0;
+  }
+
+ public:
+  consteval TokenTable() {
+    TTENTRY1(trie_, TOKEN_DIVIDE, '/', TOKEN_DIV);
+    TTENTRY1(trie_, TOKEN_BNOT, '=', TOKEN_BNOT_ASSIGN);
+    TTENTRY2(trie_, TOKEN_LESS, '<', TOKEN_BLEFT, '=', TOKEN_LESS_EQUAL);
+    TTENTRY2(trie_, TOKEN_BIGGER, '>', TOKEN_BRIGHT, '=', TOKEN_BIGGER_EQUAL);
+    TTENTRY1(trie_, TOKEN_ASSIGN, '=', TOKEN_EQUALS);
+    TTENTRY1(trie_, TOKEN_COLON, ':', TOKEN_COLON_COLON);
+    TTENTRY0(trie_, TOKEN_PLUS);
+    TTENTRY1(trie_, TOKEN_MINUS, '-', TOKEN_COMMENT);
+    TTENTRY0(trie_, TOKEN_ASTERISK);
+    TTENTRY0(trie_, TOKEN_MOD);
+    TTENTRY0(trie_, TOKEN_BXOR);
+    TTENTRY0(trie_, TOKEN_DASH);
+    TTENTRY0(trie_, TOKEN_AT);
+    TTENTRY0(trie_, TOKEN_BOR);
+    TTENTRY0(trie_, TOKEN_LEFT_PAREN);
+    TTENTRY0(trie_, TOKEN_RIGHT_PAREN);
+    TTENTRY0(trie_, TOKEN_LEFT_BRACE);
+    TTENTRY0(trie_, TOKEN_RIGHT_BRACE);
+    TTENTRY0(trie_, TOKEN_SEMICOLON);
+    TTENTRY0(trie_, TOKEN_COMMA);
+    TTENTRY0(trie_, TOKEN_RIGHT_BRACKET);
+  }
+
+  const Entry &operator[](char c) const noexcept { return trie_[idx(c)]; }
+};
+
+void TokenIterator::recognizeTokensWithTable() {
 #define STENTRY0(mt) \
   { .main_type = mt }
 #define STENTRY1(mt, c0, t0)                                    \
@@ -326,6 +411,15 @@ void TokenIterator::recognizeTokensWithTable() {
       {.c = c2, .t = t2}                   \
     }                                      \
   }
+  struct CharTokenPair {
+    char c;
+    LuaTokenType t;
+  };
+  struct ScannerTableEntry {
+    LuaTokenType main_type;
+    size_t size;
+    CharTokenPair pairs[2];
+  };
   static constexpr ScannerTableEntry scanner_table[] = {
       STENTRY1(TOKEN_DIVIDE, '/', TOKEN_DIV),
       STENTRY1(TOKEN_BNOT, '=', TOKEN_BNOT_ASSIGN),
@@ -536,7 +630,7 @@ void TokenIterator::nextToken() {
         }
         return;
       }
-      case LUACOMP_SPECIAL_CHAR: {
+      case LUACOMP_TOKEN: {
         recognizeTokensWithTable();
         if (current_token_.type == TOKEN_COMMENT) {
           while (input_[++current_input_pos_] != '\n' &&
@@ -547,8 +641,9 @@ void TokenIterator::nextToken() {
         }
       }
       case LUACOMP_ALPHA_CHAR: {
+        static constinit const auto kwtable = KeywordsTable();
         const auto [str, len] = scanString(isKeywordCharacter);
-        LuaTokenType token_type = recognizeKeywordsWithTable(str, len);
+        LuaTokenType token_type = kwtable[String(str, len)];
         current_token_.type = token_type;
         if (token_type == TOKEN_IDENTIFIER) {
           const auto string = string_table_.InsertString(str, len);
@@ -572,4 +667,101 @@ void TokenIterator::nextToken() {
       }
     }
   }
+}
+
+TokenIterator1::TokenIterator1(const char *input_name, String input)
+    : input_name_(input_name),
+      input_(input),
+      input_iter_(input_),
+      string_table_(128) {}
+
+const Token &TokenIterator1::operator*() const noexcept {
+  return current_token_;
+}
+
+TokenIterator1::operator bool() const noexcept {
+  return current_token_.type != TOKEN_INVALID && !!input_iter_;
+}
+
+static constinit const auto kwtable = KeywordsTable();
+static constinit const auto toktable = TokenTable();
+
+const TokenIterator1 &TokenIterator1::operator++() {
+TokenIterator1_tokenization_start:
+  switch (input_iter_.Peek()) {
+    // Scans either a keyword or an identifer. The algorithm is as follows:
+    // 1. Save the current iterator that points to the first character in a word
+    // 2. Iterate over the input string until non-alphanumeric character is met
+    // 3. After iterating, the current iterator points to the character next to
+    // the last alphanumeric character. If the end of the input has reached, the
+    // iterator points to a byte that is next to the last byte.
+    // 4. The word is obtained as the difference between current iterator and
+    // iterator saved at step 1
+    // 5. If the keywords table recognizes the keyword, we have a token type
+    // 6. Otherwise, we have some identifier and we insert it to the string
+    // table to intern it
+    // 7. End. Next tokenization iteration will start with the character that is
+    // next to the scanned word
+    case LUACOMP_ALPHA_CHAR: {
+      const auto start = input_iter_;
+      input_iter_.IterateWhile(isKeywordCharacter);
+      const auto word = input_iter_ - start;
+      current_token_.type = kwtable[word];
+      if (current_token_.type == TOKEN_IDENTIFIER) {
+        current_token_.value.identifier = string_table_.Insert(word);
+      }
+    } break;
+    // Recognizes usual tokens like < <= >= and so on.
+    // 1. Looking up the token table for the current character, obtaining the
+    // corresponding table entry
+    // 2. Assign the token type from the entry
+    // 3. Getting the next character and iterating over the variants checking
+    // whether this character matches any
+    // 4. If there's a match, assigning the final token type and incrementing
+    // the input iterator so that the next tokenization iteration will start
+    // with the next character
+    // 5. Otherwise, we already assigned the actual token type and incremented
+    // the iterator.
+    // 6. If the final token is a comment, we have to skip the entire line
+    // 7. End
+    case LUACOMP_TOKEN: {
+      const auto &entry = toktable[input_iter_.Peek()];
+      current_token_.type = entry.main_type;
+      char c = input_iter_.Next();
+      for (size_t i = 0; i < entry.size; ++i) {
+        if (c == entry.variants[i].c) {
+          current_token_.type = entry.variants[i].t;
+          input_iter_.Next();
+          break;
+        }
+      }
+      // Skipping the line in case of comment
+      if (current_token_.type == TOKEN_COMMENT) {
+        input_iter_.IterateWhile([](char c) { return c != '\n'; });
+        // We have to skip comments. This goto will trigger a jump to case '\n',
+        // which is exactly what we need
+        goto TokenIterator1_tokenization_start;
+      }
+    } break;
+    case '.': {
+      current_token_.type = TOKEN_PERIOD;
+      if (input_iter_.Next() == '.') {
+        current_token_.type = TOKEN_2PERIOD;
+        if (input_iter_.Next() == '.') {
+          current_token_.type = TOKEN_3PERIOD;
+          input_iter_.Next();
+        }
+      }
+    } break;
+    case '\n': {
+      ++line_number_;
+    }
+    case ' ':
+    case '\t':
+    case '\r': {
+      input_iter_.Next();
+      goto TokenIterator1_tokenization_start;
+    } break;
+  }
+  return *this;
 }

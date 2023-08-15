@@ -126,3 +126,60 @@ const char* StringTable::InsertString(const char* string, size_t len) {
   }
   return buckets_[idx]->GetString();
 }
+
+const char* StringTable::Insert(const String& string) {
+  return InsertString(string.data, string.len);
+}
+
+String& String::operator=(const char* c_string) noexcept {
+  *this = String(c_string);
+  return *this;
+}
+
+bool String::operator==(const String& other) const noexcept {
+  return len == other.len && !strncmp(data, other.data, len);
+}
+
+bool String::operator==(const char* c_string) const noexcept {
+  return *this == String(c_string);
+}
+
+char String::operator[](size_t index) const noexcept {
+  return data[index];
+}
+
+StringIterator& StringIterator::increment() noexcept {
+  ++pos_;
+  return *this;
+}
+
+StringIterator::operator bool() const noexcept {
+  return pos_ < string_.len;
+}
+
+String StringIterator::operator-(const StringIterator& other) const {
+  if (&string_ != &other.string_) {
+    throw RuntimeError("Iterators represent different strings: %p vs. %p",
+        &string_, &other.string_);
+  }
+  if (other.pos_ >= pos_) {
+    return {};
+  }
+
+  return String(string_.data + other.pos_, pos_ - other.pos_);
+}
+
+bool StringIterator::IterateTo(char target) noexcept {
+  while (increment() && Peek() != target)
+    ;
+  return Peek() == target;
+}
+
+char StringIterator::Next() noexcept {
+  ++pos_;
+  return Peek();
+}
+
+char StringIterator::Peek() const noexcept {
+  return operator bool() * string_[pos_];
+}
