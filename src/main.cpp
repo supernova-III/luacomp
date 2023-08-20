@@ -1,8 +1,8 @@
-#include "lib.cpp"
-#include "tokenizer.cpp"
 #include <fstream>
 #include <iterator>
 #include <vector>
+#include "lib.hh"
+#include "tokenizer.hh"
 
 int main(int argc, char* argv[]) try {
   if (argc != 2) {

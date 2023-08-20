@@ -43,8 +43,8 @@ class PoolAllocator {
   size_t n_pools_;
 
  public:
-  static consteval size_t MaxNumberOfPools() { return 4; }
-  static consteval size_t MaxPoolCapacity() { return 4 * 1024; }
+  static constexpr size_t MaxNumberOfPools() { return 4; }
+  static constexpr size_t MaxPoolCapacity() { return 4 * 1024; }
 
   // Initializes object, allocating the first pool with the given capacity
   PoolAllocator(size_t size = MaxPoolCapacity());

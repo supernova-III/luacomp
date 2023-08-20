@@ -1,4 +1,5 @@
 #pragma once
+#include "lib.hh"
 
 // Function that transforms a character into a digit
 using TransformingFunction = double (*)(char);

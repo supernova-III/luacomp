@@ -1,5 +1,5 @@
-#include "lib.cpp"
-#include "tokenizer.cpp"
+#include "lib.hh"
+#include "tokenizer.hh"
 #include <gtest/gtest.h>
 
 bool operator==(const Token& left, const Token& right) {

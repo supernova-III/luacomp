@@ -1,5 +1,4 @@
 #include "tokenizer.hh"
-#include "lib.hh"
 
 #define VAR(str, tok) \
   { String{str, sizeof(str) - 1}, tok }
