@@ -307,11 +307,10 @@ TokenIterator_tokenization_start:
       current_token_.type = entry.main_type;
       char c = input_iter_.Next();
       ++col_;
-      for (size_t i = 0; i < entry.size; ++i) {
+      for (size_t i = 0; i < entry.size; ++i, ++col_) {
         if (c == entry.variants[i].c) {
           current_token_.type = entry.variants[i].t;
           input_iter_.Next();
-          ++col_;
           break;
         }
       }
@@ -326,10 +325,13 @@ TokenIterator_tokenization_start:
     case '.': {
       current_token_.type = TOKEN_PERIOD;
       if (input_iter_.Next() == '.') {
+        ++col_;
         current_token_.type = TOKEN_2PERIOD;
         if (input_iter_.Next() == '.') {
+          ++col_;
           current_token_.type = TOKEN_3PERIOD;
           input_iter_.Next();
+          ++col_;
         }
       }
     } break;
@@ -341,6 +343,7 @@ TokenIterator_tokenization_start:
     case '\t':
     case '\r': {
       input_iter_.Next();
+      ++col_;
       goto TokenIterator_tokenization_start;
     } break;
   }
