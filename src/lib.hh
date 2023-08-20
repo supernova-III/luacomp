@@ -150,7 +150,7 @@ class StringTable {
  public:
   StringTable(size_t capacity);
 
-  const char *InsertString(const char *string, size_t len);
+  const char *Insert(const char *string, size_t len);
   const char *Insert(const String &string);
 
  private:

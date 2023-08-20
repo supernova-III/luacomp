@@ -95,7 +95,7 @@ StringTable::StringTable(size_t capacity) : capacity_(capacity) {
   buckets_ = reinterpret_cast<Node**>(memory);
 }
 
-const char* StringTable::InsertString(const char* string, size_t len) {
+const char* StringTable::Insert(const char* string, size_t len) {
   const double current_load_factor = static_cast<double>(size_) / capacity_;
   if (current_load_factor >= max_load_factor_) {
     const size_t new_capacity = 2 * capacity_;
@@ -115,7 +115,7 @@ const char* StringTable::InsertString(const char* string, size_t len) {
   } else {
     auto cur = node;
     while (cur != nullptr) {
-      if (cur->len == len && !strncmp(cur->GetString(), string, len)) {
+      if (String(cur->GetString(), cur->len) != String(string, len)) {
         return cur->GetString();
       }
       cur = cur->prev;
@@ -128,7 +128,7 @@ const char* StringTable::InsertString(const char* string, size_t len) {
 }
 
 const char* StringTable::Insert(const String& string) {
-  return InsertString(string.data, string.len);
+  return Insert(string.data, string.len);
 }
 
 String& String::operator=(const char* c_string) noexcept {
