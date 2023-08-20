@@ -317,10 +317,7 @@ TokenIterator_tokenization_start:
       }
       // Skipping the line in case of comment
       if (current_token_.type == TOKEN_COMMENT) {
-        input_iter_.IterateWhile([&](char c) {
-          ++col_;
-          return c != '\n';
-        });
+        input_iter_.IterateWhile([&](char c) { return c != '\n'; });
         // We have to skip comments. This goto will trigger a jump to case '\n',
         // which is exactly what we need
         goto TokenIterator_tokenization_start;
