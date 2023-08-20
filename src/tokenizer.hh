@@ -112,7 +112,7 @@ struct Token {
 
 // Iterates over provided string, recognizing tokens. It's not assumed to store
 // all recognized tokens, just the last one.
-class TokenIterator1 {
+class TokenIterator {
   // The input stream
   String input_;
   // Iterator over the input string
@@ -127,71 +127,13 @@ class TokenIterator1 {
   StringTable string_table_;
 
  public:
-  TokenIterator1(const char* input_name, String input);
+  TokenIterator(const char* input_name, String input);
 
   // Scans for the next token
-  const TokenIterator1& operator++();
+  const TokenIterator& operator++();
   // Peeks the latest recognized token
   const Token& operator*() const noexcept;
   // Returns true if tokenization is not yet finished and there are no errors,
   // false otherwise
   operator bool() const noexcept;
-};
-
-// Iterates over provided string, scanning tokens. It doesn't store tokens, it
-// can only provide the latest scanned token.
-class TokenIterator {
-  // Input stream
-  const char* input_ = nullptr;
-  const char* input_name_ = nullptr;
-  // Size of an input stream
-  size_t input_size_ = 0;
-  // Current line number in a source file
-  size_t line_number_ = 1;
-  // Position of a character being recognized
-  size_t current_input_pos_ = 0;
-  // Last scanned token
-  Token current_token_ = {};
-
-  StringTable string_table_;
-
- public:
-  // Should be used to create tokenizer for an input string.
-  TokenIterator(const char* input_name, const char* input, size_t size);
-
-  // Scan for the next token
-  TokenIterator& operator++();
-
-  // Peek the latest scanned token
-  const Token& operator*() const;
-
-  // Iterator is valid if an input stream is not exhausted or the latest scanned
-  // token was not invalid
-  operator bool() const;
-
- private:
-  // The actual function that does tokenization
-  void nextToken();
-
-  // Do table-driven scan for certain characters
-  void recognizeTokensWithTable();
-
-  // Advance input iterator and get next character
-  char nextCharacter();
-
-  // Get current character
-  char peekCharacter();
-
-  // Throws runtime error with the message about unexpected character
-  void unexpectedCharacter();
-
-  // Generic function to deduplicate code that scans strings
-  struct ScanStringResult {
-    const char* str;
-    size_t len;
-  };
-  ScanStringResult scanString(CheckingFunction f);
-
-  // Recognize exponent
-  double recognizeExponent(CheckingFunction checker, double exp_base);
 };

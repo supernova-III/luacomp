@@ -272,35 +272,6 @@ LuaTokenType KeywordsTable::operator[](const String &string) const noexcept {
   }
   return TOKEN_IDENTIFIER;
 }
-}  // namespace
-
-TokenIterator::TokenIterator(
-    const char *input_name, const char *input, size_t size)
-    : input_(input),
-      input_name_(input_name),
-      input_size_(size),
-      string_table_(128) {}
-
-TokenIterator::operator bool() const {
-  return current_token_.type != TOKEN_END_OF_STREAM;
-}
-
-TokenIterator &TokenIterator::operator++() {
-  nextToken();
-  return *this;
-}
-
-const Token &TokenIterator::operator*() const {
-  return current_token_;
-}
-
-char TokenIterator::nextCharacter() {
-  return input_[++current_input_pos_];
-}
-
-char TokenIterator::peekCharacter() {
-  return input_[current_input_pos_];
-}
 
 #define TTENTRY0(trie, mt) trie[mt] = {.main_type = mt}
 #define TTENTRY1(trie, mt, c0, t0) \
@@ -395,298 +366,27 @@ class TokenTable {
 
   const Entry &operator[](char c) const noexcept { return trie_[idx(c)]; }
 };
-
-void TokenIterator::recognizeTokensWithTable() {
-#define STENTRY0(mt) \
-  { .main_type = mt }
-#define STENTRY1(mt, c0, t0)                                    \
-  {                                                             \
-    .main_type = mt, .size = 1, .pairs = { {.c = c0, .t = t0} } \
-  }
-#define STENTRY2(mt, c1, t1, c2, t2)       \
-  {                                        \
-    .main_type = mt, .size = 2, .pairs = { \
-      {.c = c1, .t = t1},                  \
-      {.c = c2, .t = t2}                   \
-    }                                      \
-  }
-  struct CharTokenPair {
-    char c;
-    LuaTokenType t;
-  };
-  struct ScannerTableEntry {
-    LuaTokenType main_type;
-    size_t size;
-    CharTokenPair pairs[2];
-  };
-  static constexpr ScannerTableEntry scanner_table[] = {
-      STENTRY1(TOKEN_DIVIDE, '/', TOKEN_DIV),
-      STENTRY1(TOKEN_BNOT, '=', TOKEN_BNOT_ASSIGN),
-      STENTRY2(TOKEN_LESS, '<', TOKEN_BLEFT, '=', TOKEN_LESS_EQUAL),
-      STENTRY2(TOKEN_BIGGER, '>', TOKEN_BRIGHT, '=', TOKEN_BIGGER_EQUAL),
-      STENTRY1(TOKEN_ASSIGN, '=', TOKEN_EQUALS),
-      STENTRY1(TOKEN_COLON, ':', TOKEN_COLON_COLON), STENTRY0(TOKEN_PLUS),
-      STENTRY1(TOKEN_MINUS, '-', TOKEN_COMMENT), STENTRY0(TOKEN_ASTERISK),
-      STENTRY0(TOKEN_MOD), STENTRY0(TOKEN_BXOR), STENTRY0(TOKEN_DASH),
-      STENTRY0(TOKEN_AT), STENTRY0(TOKEN_BOR), STENTRY0(TOKEN_LEFT_PAREN),
-      STENTRY0(TOKEN_RIGHT_PAREN), STENTRY0(TOKEN_LEFT_BRACE),
-      STENTRY0(TOKEN_RIGHT_BRACE), STENTRY0(TOKEN_SEMICOLON),
-      STENTRY0(TOKEN_COMMA), STENTRY0(TOKEN_RIGHT_BRACKET)};
-
-  size_t table_index = TOKEN_DIVIDE;
-  switch (peekCharacter()) {
-    case '~': table_index = TOKEN_BNOT; break;
-    case '<': table_index = TOKEN_LESS; break;
-    case '>': table_index = TOKEN_BIGGER; break;
-    case '=': table_index = TOKEN_ASSIGN; break;
-    case ':': table_index = TOKEN_COLON; break;
-    case '+': table_index = TOKEN_PLUS; break;
-    case '-': table_index = TOKEN_MINUS; break;
-    case '*': table_index = TOKEN_ASTERISK; break;
-    case '%': table_index = TOKEN_MOD; break;
-    case '^': table_index = TOKEN_BXOR; break;
-    case '#': table_index = TOKEN_DASH; break;
-    case '&': table_index = TOKEN_AT; break;
-    case '|': table_index = TOKEN_BOR; break;
-    case '(': table_index = TOKEN_LEFT_PAREN; break;
-    case ')': table_index = TOKEN_RIGHT_PAREN; break;
-    case '{': table_index = TOKEN_LEFT_BRACE; break;
-    case '}': table_index = TOKEN_RIGHT_BRACE; break;
-    case ';': table_index = TOKEN_SEMICOLON; break;
-    case ',': table_index = TOKEN_COMMA; break;
-    case ']': table_index = TOKEN_RIGHT_BRACKET; break;
-  }
-
-  const auto &entry = scanner_table[table_index];
-  char c = nextCharacter();
-  for (size_t i = 0; i < entry.size; ++i) {
-    if (c == entry.pairs[i].c) {
-      current_token_.type = entry.pairs[i].t;
-      ++current_input_pos_;
-      return;
-    }
-  }
-  current_token_.type = static_cast<LuaTokenType>(entry.main_type);
-}
-
-void TokenIterator::unexpectedCharacter() {
-  throw RuntimeError("Unexpected token '%c' at %s:%llu:%llu", peekCharacter(),
-      input_name_ ? input_name_ : "", line_number_, current_input_pos_ + 1);
-}
-
-TokenIterator::ScanStringResult TokenIterator::scanString(CheckingFunction f) {
-  const auto start = current_input_pos_;
-  while (f(peekCharacter())) {
-    nextCharacter();
-  }
-  const auto len = current_input_pos_ - start;
-  return {.str = input_ + start, .len = len};
-}
-
-namespace {
-struct ScanIntegerResult {
-  double magnitude;
-  double power_of_base;
-};
-
-ScanIntegerResult scanInteger(const char *str, size_t len, double base) {
-  auto transform = base == 10 ? charToDigit : hexToNumber;
-  double magnitude = 0;
-  double power_of_base = 1;
-  for (size_t i = 0; i < len; ++i) {
-    const auto index = len - i - 1;
-    const auto c = str[index];
-    magnitude += power_of_base * transform(c);
-    power_of_base *= base;
-  }
-  return {magnitude, power_of_base};
-}
 }  // namespace
 
-double TokenIterator::recognizeExponent(
-    CheckingFunction checker, double exp_base) {
-  double result = 1;
-  char c = nextCharacter();
-  double sign = 1;
-  if (c == '-') {
-    sign = -1;
-    nextCharacter();
-  } else if (c == '+') {
-    c = nextCharacter();
-  }
-  const auto [str, len] = scanString(checker);
-  const auto [number, _] = scanInteger(str, len, 10);
-  auto power = static_cast<size_t>(number);
-  double base_in_power = 1;
-  for (size_t i = 0; i < power; ++i) {
-    base_in_power *= exp_base;
-  }
-  if (sign > 0) {
-    result *= base_in_power;
-  } else {
-    result /= base_in_power;
-  }
-  return result;
-}
-
-void TokenIterator::nextToken() {
-  while (true) {
-    if (current_input_pos_ >= input_size_ || peekCharacter() == '\0') {
-      current_token_.type = TOKEN_END_OF_STREAM;
-      return;
-    }
-
-    char c = input_[current_input_pos_];
-
-    switch (c) {
-      case '[': {
-        const char *start = input_ + current_input_pos_;
-        const auto next_index = current_input_pos_ + 1;
-        if (next_index < input_size_) {
-          if (input_[next_index] != '[') {
-            current_token_.type = TOKEN_LEFT_BRACKET;
-          }
-          current_input_pos_ += 2;
-        } else {
-          throw RuntimeError("Unexpected EOF");
-        }
-
-        while (current_input_pos_ < input_size_ &&
-               input_[current_input_pos_] != ']') {
-          ++current_input_pos_;
-        }
-
-        if (current_input_pos_ + 1 < input_size_) {
-          ++current_input_pos_;
-          if (input_[current_input_pos_] == ']') {
-            current_token_.type = TOKEN_LONG_STRING_LITERAL;
-            const char *new_string = string_table_.InsertString(
-                start + 2, input_ + current_input_pos_ - start - 3);
-            current_token_.value.string_literal = new_string;
-            ++current_input_pos_;
-            return;
-          }
-        }
-
-        unexpectedCharacter();
-
-      } break;
-      case '"':
-      case '\'': {
-        const char *start = input_ + current_input_pos_;
-        ++current_input_pos_;
-        while (current_input_pos_ < input_size_ &&
-               input_[current_input_pos_] != c) {
-          ++current_input_pos_;
-        }
-
-        if (input_[current_input_pos_] != c) {
-          unexpectedCharacter();
-        }
-        ++current_input_pos_;
-
-        const size_t len = input_ + current_input_pos_ - start - 2;
-        const char *string = string_table_.InsertString(start + 1, len);
-        current_token_.type = TOKEN_SHORT_STRING_LITERAL;
-        current_token_.value.string_literal = string;
-        return;
-      } break;
-      case '.': {
-        current_token_.type = TOKEN_PERIOD;
-        c = nextCharacter();
-        if (c == '.') {
-          current_token_.type = TOKEN_2PERIOD;
-          c = nextCharacter();
-          if (c == '.') {
-            current_token_.type = TOKEN_3PERIOD;
-            ++current_input_pos_;
-          } else {
-            return;
-          }
-        }
-
-        if (isDigit(c)) {
-          current_token_.type = TOKEN_NUMBER;
-          const auto res = TryEvaluateNumber(input_ + current_input_pos_ - 1,
-              input_size_ - current_input_pos_ + 1);
-          if (res) {
-            current_token_.value.number = res.number;
-            current_input_pos_ += res.len;
-            return;
-          } else {
-          }
-        }
-        return;
-      }
-      case LUACOMP_DIGIT_CHAR: {
-        current_token_.type = TOKEN_NUMBER;
-        const auto res = TryEvaluateNumber(
-            input_ + current_input_pos_, input_size_ - current_input_pos_);
-        if (res) {
-          current_token_.value.number = res.number;
-          current_input_pos_ += res.len;
-        } else {
-        }
-        return;
-      }
-      case LUACOMP_TOKEN: {
-        recognizeTokensWithTable();
-        if (current_token_.type == TOKEN_COMMENT) {
-          while (input_[++current_input_pos_] != '\n' &&
-                 current_input_pos_ < input_size_)
-            ;
-        } else {
-          return;
-        }
-      }
-      case LUACOMP_ALPHA_CHAR: {
-        static constinit const auto kwtable = KeywordsTable();
-        const auto [str, len] = scanString(isKeywordCharacter);
-        LuaTokenType token_type = kwtable[String(str, len)];
-        current_token_.type = token_type;
-        if (token_type == TOKEN_IDENTIFIER) {
-          const auto string = string_table_.InsertString(str, len);
-          current_token_.value.identifier = string;
-        }
-        return;
-      }
-      case '\n': {
-        ++line_number_;
-        ++current_input_pos_;
-      } break;
-      case ' ':
-      case '\r':
-      case '\t': {
-        while (input_[++current_input_pos_] == c &&
-               current_input_pos_ < input_size_) {
-        }
-      } break;
-      default: {
-        unexpectedCharacter();
-      }
-    }
-  }
-}
-
-TokenIterator1::TokenIterator1(const char *input_name, String input)
+TokenIterator::TokenIterator(const char *input_name, String input)
     : input_name_(input_name),
       input_(input),
       input_iter_(input_),
       string_table_(128) {}
 
-const Token &TokenIterator1::operator*() const noexcept {
+const Token &TokenIterator::operator*() const noexcept {
   return current_token_;
 }
 
-TokenIterator1::operator bool() const noexcept {
+TokenIterator::operator bool() const noexcept {
   return current_token_.type != TOKEN_INVALID && !!input_iter_;
 }
 
 static constinit const auto kwtable = KeywordsTable();
 static constinit const auto toktable = TokenTable();
 
-const TokenIterator1 &TokenIterator1::operator++() {
-TokenIterator1_tokenization_start:
+const TokenIterator &TokenIterator::operator++() {
+TokenIterator_tokenization_start:
   switch (input_iter_.Peek()) {
     // Scans either a keyword or an identifer. The algorithm is as follows:
     // 1. Save the current iterator that points to the first character in a word
@@ -739,7 +439,7 @@ TokenIterator1_tokenization_start:
         input_iter_.IterateWhile([](char c) { return c != '\n'; });
         // We have to skip comments. This goto will trigger a jump to case '\n',
         // which is exactly what we need
-        goto TokenIterator1_tokenization_start;
+        goto TokenIterator_tokenization_start;
       }
     } break;
     case '.': {
@@ -759,7 +459,7 @@ TokenIterator1_tokenization_start:
     case '\t':
     case '\r': {
       input_iter_.Next();
-      goto TokenIterator1_tokenization_start;
+      goto TokenIterator_tokenization_start;
     } break;
   }
   return *this;
