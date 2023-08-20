@@ -279,7 +279,10 @@ TokenIterator_tokenization_start:
     // next to the scanned word
     case LUACOMP_ALPHA_CHAR: {
       const auto start = input_iter_;
-      input_iter_.IterateWhile(isKeywordCharacter);
+      input_iter_.IterateWhile([&](char c) -> bool {
+        ++col_;
+        return isKeywordCharacter(c);
+      });
       const auto word = input_iter_ - start;
       current_token_.type = kwtable[word];
       if (current_token_.type == TOKEN_IDENTIFIER) {
@@ -303,16 +306,21 @@ TokenIterator_tokenization_start:
       const auto &entry = toktable[input_iter_.Peek()];
       current_token_.type = entry.main_type;
       char c = input_iter_.Next();
+      ++col_;
       for (size_t i = 0; i < entry.size; ++i) {
         if (c == entry.variants[i].c) {
           current_token_.type = entry.variants[i].t;
           input_iter_.Next();
+          ++col_;
           break;
         }
       }
       // Skipping the line in case of comment
       if (current_token_.type == TOKEN_COMMENT) {
-        input_iter_.IterateWhile([](char c) { return c != '\n'; });
+        input_iter_.IterateWhile([&](char c) {
+          ++col_;
+          return c != '\n';
+        });
         // We have to skip comments. This goto will trigger a jump to case '\n',
         // which is exactly what we need
         goto TokenIterator_tokenization_start;
@@ -329,7 +337,8 @@ TokenIterator_tokenization_start:
       }
     } break;
     case '\n': {
-      ++line_number_;
+      ++line_;
+      col_ = 0;
     }
     case ' ':
     case '\t':

@@ -92,7 +92,9 @@ class TokenIterator {
   // Input stream name (usually means source file name)
   const char* input_name_;
   // Current line number in the input stream
-  size_t line_number_ = 0;
+  size_t line_ = 0;
+  // Current colon number in the input stream
+  size_t col_ = 0;
   // Last recognized token
   Token current_token_;
   // Table for interning identifiers
