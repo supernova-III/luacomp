@@ -61,10 +61,10 @@ TEST(Tokenizer, TryEvaluateInteger) {
     tok_testcase("0x.123abcp2",         0x.123abcp2,            "Hexadecimal float without integer part and with exponent"),
     tok_testcase("0x123abc.p2",         0x123abc.p2,            "Hexadecimal float without fractional part and with exponent"),
 
-    tok_testcase("0x123abcp+2",          0x123abcp2,            "Hexadecimal integer with positive exponent"),
-    tok_testcase("0x123abc.123abcp+2",   0x123abc.123abcp2,     "Hexadecimal float with positive exponent"),
-    tok_testcase("0x.123abcp-2",         0x.123abcp-2,          "Hexadecimal float without integer part and with negative exponent"),
-    tok_testcase("0x123abc.p-2",         0x123abc.p-2,          "Hexadecimal float without fractional part and with negative exponent"),
+    tok_testcase("0x123abcp+2",         0x123abcp2,             "Hexadecimal integer with positive exponent"),
+    tok_testcase("0x123abc.123abcp+2",  0x123abc.123abcp2,      "Hexadecimal float with positive exponent"),
+    tok_testcase("0x.123abcp-2",        0x.123abcp-2,           "Hexadecimal float without integer part and with negative exponent"),
+    tok_testcase("0x123abc.p-2",        0x123abc.p-2,           "Hexadecimal float without fractional part and with negative exponent"),
   };
   // clang-format on
 #undef tok_testcase
