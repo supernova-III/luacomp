@@ -73,6 +73,17 @@ enum LuaTokenType : uint32_t {
   TOKEN_INVALID
 };
 
+struct EvaluateNumberResult {
+  double number;
+  enum struct Error {
+    OK,
+    NO_INTEGER_AND_FRACTIONAL_PART,
+    UNEXPECTED_END_OF_EXPONENT_PART
+  } error = Error::OK;
+};
+
+EvaluateNumberResult EvaluateNumber(StringIterator& iter);
+
 struct Token {
   LuaTokenType type = TOKEN_END_OF_STREAM;
   union {
@@ -110,4 +121,9 @@ class TokenIterator {
   // Returns true if tokenization is not yet finished and there are no errors,
   // false otherwise
   operator bool() const noexcept;
+
+ private:
+  // Tries to evaluate a number that is expected in the input stream. Throws on
+  // any error
+  double tryEvaluateNumber();
 };

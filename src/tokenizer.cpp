@@ -262,8 +262,16 @@ static constinit const auto kwtable = KeywordsTable();
 static constinit const auto toktable = TokenTable();
 
 const TokenIterator &TokenIterator::operator++() {
+  // Wrapps call to Next() method of the input iterator, incrementing the column
+  // number
+  auto NextChar = [&] {
+    ++col_;
+    return input_iter_.Next();
+  };
+
 TokenIterator_tokenization_start:
-  switch (input_iter_.Peek()) {
+  char c = input_iter_.Peek();
+  switch (c) {
     // Scans either a keyword or an identifer. The algorithm is as follows:
     // 1. Save the current iterator that points to the first character in a word
     // 2. Iterate over the input string until non-alphanumeric character is met
@@ -305,12 +313,11 @@ TokenIterator_tokenization_start:
     case LUACOMP_TOKEN: {
       const auto &entry = toktable[input_iter_.Peek()];
       current_token_.type = entry.main_type;
-      char c = input_iter_.Next();
-      ++col_;
+      char c = NextChar();
       for (size_t i = 0; i < entry.size; ++i, ++col_) {
         if (c == entry.variants[i].c) {
           current_token_.type = entry.variants[i].t;
-          input_iter_.Next();
+          NextChar();
           break;
         }
       }
@@ -324,16 +331,20 @@ TokenIterator_tokenization_start:
     } break;
     case '.': {
       current_token_.type = TOKEN_PERIOD;
-      if (input_iter_.Next() == '.') {
-        ++col_;
+      if (NextChar() == '.') {
         current_token_.type = TOKEN_2PERIOD;
-        if (input_iter_.Next() == '.') {
-          ++col_;
+        if (NextChar() == '.') {
           current_token_.type = TOKEN_3PERIOD;
-          input_iter_.Next();
-          ++col_;
+          NextChar();
         }
+      } else if (isDigit(input_iter_.Peek())) {
+        current_token_.type = TOKEN_NUMBER;
+        current_token_.value.number = tryEvaluateNumber();
       }
+    } break;
+    case LUACOMP_DIGIT_CHAR: {
+      current_token_.type = TOKEN_NUMBER;
+      current_token_.value.number = tryEvaluateNumber();
     } break;
     case '\n': {
       ++line_;
@@ -342,10 +353,123 @@ TokenIterator_tokenization_start:
     case ' ':
     case '\t':
     case '\r': {
-      input_iter_.Next();
-      ++col_;
+      NextChar();
       goto TokenIterator_tokenization_start;
     } break;
   }
   return *this;
+}
+
+double TokenIterator::tryEvaluateNumber() {
+  StringIterator start = input_iter_;
+  const auto [number, error] = EvaluateNumber(input_iter_);
+  switch (error) {
+    case EvaluateNumberResult::Error::NO_INTEGER_AND_FRACTIONAL_PART: {
+      throw RuntimeError(
+          "Lexical error %s:%llu:%llu: a number must have either "
+          "integer "
+          "or fractional part.",
+          input_name_, line_, col_);
+    }
+    case EvaluateNumberResult::Error::UNEXPECTED_END_OF_EXPONENT_PART: {
+      throw RuntimeError(
+          "Lexical error %s:%llu:%llu: unexpected end of the exponent "
+          "part.",
+          line_, col_);
+    }
+    default: break;
+  }
+  // A single number literal doesn't occupy more than 1 line
+  col_ += (input_iter_ - start).len;
+  return number;
+}
+
+namespace {
+struct EvaluateIntegerResult {
+  double number;
+  double power_of_base = 1.0;
+};
+
+EvaluateIntegerResult evaluateInteger(const String &string, double base) {
+  auto transform = base == 10 ? charToDigit : hexToNumber;
+  EvaluateIntegerResult res = {};
+  for (size_t i = 0; i < string.len; ++i) {
+    const auto index = string.len - i - 1;
+    res.number += res.power_of_base * transform(string[index]);
+    res.power_of_base *= base;
+  }
+  return res;
+}
+}  // namespace
+
+EvaluateNumberResult EvaluateNumber(StringIterator &iter) {
+  char c = iter.Peek();
+  int base = 10;
+  int exponent_base = 10;
+  auto checker = isDigit;
+  EvaluateNumberResult result = {};
+  // Checking for 0x or 0X
+  if (c == '0') {
+    c = iter.Next();
+    if (c == 'x' || c == 'X') {
+      // If so, setting helper variables for future evaluation
+      base = 16;
+      exponent_base = 2;
+      checker = isHexadecimal;
+    }
+  }
+
+  // Getting integer part
+  const StringIterator integer_part_start = iter;
+  iter.IterateWhile(checker);
+  const String integer_part = iter - integer_part_start;
+  const auto [evaluated_integer_part, _] = evaluateInteger(integer_part, base);
+
+  double evaluated_fractional_part = 0;
+  // Checking fractional part
+  if (iter.Peek() == '.') {
+    c = iter.Next();
+    const StringIterator fractional_part_start = iter;
+    iter.IterateWhile(checker);
+    const String fractional_part = iter - fractional_part_start;
+
+    if (integer_part.len == 0 && fractional_part.len == 0) {
+      result.error =
+          EvaluateNumberResult::Error::NO_INTEGER_AND_FRACTIONAL_PART;
+      return result;
+    }
+
+    auto [res_frac, power_of_base] = evaluateInteger(fractional_part, base);
+    evaluated_fractional_part = res_frac / power_of_base;
+  }
+
+  c = iter.Peek();
+  double evaluated_exponent = 1;
+  if ((exponent_base == 10 && (c == 'e' || c == 'E')) ||
+      (exponent_base == 2 && (c == 'p' || c == 'P'))) {
+    c = iter.Next();
+    int sign = 1;
+    if (c == '-' || c == '+') {
+      sign -= 2 * (c == '-');
+      c = iter.Next();
+    }
+    const StringIterator exp_part_start = iter;
+    iter.IterateWhile(isDigit);
+    const String exp_part = iter - exp_part_start;
+    if (exp_part.len == 0) {
+      result.error =
+          EvaluateNumberResult::Error::UNEXPECTED_END_OF_EXPONENT_PART;
+      return result;
+    }
+    const auto [exponent_integer, _] = evaluateInteger(exp_part, 10);
+    for (size_t i = 0; i < static_cast<size_t>(exponent_integer); ++i) {
+      evaluated_exponent *= static_cast<size_t>(exponent_base);
+    }
+    if (sign < 0) {
+      evaluated_exponent = 1 / evaluated_exponent;
+    }
+  }
+  result.number =
+      (evaluated_integer_part + evaluated_fractional_part) * evaluated_exponent;
+  return result;
 }

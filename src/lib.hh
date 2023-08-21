@@ -108,12 +108,17 @@ class StringIterator {
 
   template <typename F>
   void IterateWhile(F f) noexcept {
-    for (auto c = Next(); !!(*this) && f(c); c = Next())
+    for (auto c = Peek(); !!(*this) && f(c); c = Next())
       ;
   }
 
   // Returns next character or 0 if the end of the string reached
   char Next() noexcept;
+
+  StringIterator &operator--() noexcept {
+    pos_ -= (pos_ > 0);
+    return *this;
+  }
 
  private:
   // Increments iterator
