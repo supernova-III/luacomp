@@ -43,8 +43,8 @@ class PoolAllocator {
   size_t n_pools_;
 
  public:
-  static consteval size_t MaxNumberOfPools() { return 4; }
-  static consteval size_t MaxPoolCapacity() { return 4 * 1024; }
+  static constexpr size_t MaxNumberOfPools() { return 4; }
+  static constexpr size_t MaxPoolCapacity() { return 4 * 1024; }
 
   // Initializes object, allocating the first pool with the given capacity
   PoolAllocator(size_t size = MaxPoolCapacity());
@@ -62,6 +62,68 @@ class PoolAllocator {
 };
 
 using StringHashFunction = size_t (*)(const char *string, size_t len);
+
+struct String {
+  const char *data;
+  size_t len;
+
+  constexpr String(const char *string, size_t len) noexcept
+      : data(string), len(len) {}
+  // constructor for c-strings
+  String(const char *c_string) noexcept
+      : data(c_string), len(strlen(c_string)) {}
+  String() = default;
+  // Assign operator for c-strings
+  String &operator=(const char *c_string) noexcept;
+  // comparison with c-strings
+  bool operator==(const char *c_string) const noexcept;
+  // comparison with String
+  bool operator==(const String &other) const noexcept;
+  // returns character at index
+  char operator[](size_t index) const noexcept;
+};
+
+class StringIterator {
+  size_t pos_;
+  String &string_;
+
+ public:
+  StringIterator(String &string) noexcept : string_(string), pos_() {}
+
+  // Peeks current element
+  char Peek() const noexcept;
+
+  // Checks if an iterator is valid. An iterator is valid if its pos if less
+  // than the length of a string it iterates over.
+  operator bool() const noexcept;
+
+  // Returns a string which is a difference between two iterators. For example,
+  // if we have a string abcdef and it1 points to c, and it2 points to f, the
+  // difference is cde.
+  String operator-(const StringIterator &other) const;
+
+  // Keeps iterating until the target character met. Increments iterator first.
+  // Returns true if the target character met, false otherwise
+  bool IterateTo(char target) noexcept;
+
+  template <typename F>
+  void IterateWhile(F f) noexcept {
+    for (auto c = Peek(); !!(*this) && f(c); c = Next())
+      ;
+  }
+
+  // Returns next character or 0 if the end of the string reached
+  char Next() noexcept;
+
+  StringIterator &operator--() noexcept {
+    pos_ -= (pos_ > 0);
+    return *this;
+  }
+
+ private:
+  // Increments iterator
+  StringIterator &increment() noexcept;
+};
 
 class StringTable {
   struct Node {
@@ -93,7 +155,8 @@ class StringTable {
  public:
   StringTable(size_t capacity);
 
-  const char *InsertString(const char *string, size_t len);
+  const char *Insert(const char *string, size_t len);
+  const char *Insert(const String &string);
 
  private:
   Node *allocateStringNode(const char *str, size_t len);
