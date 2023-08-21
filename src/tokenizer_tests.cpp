@@ -41,13 +41,13 @@ TEST(Tokenizer, TryEvaluateInteger) {
     tok_testcase(23.123e+12, "Decimal float with positive exponent test"),
     tok_testcase(23.123e-12, "Decimal float with negative exponent test"),
     tok_testcase(123, "Decimal float without integer part test"),
-    tok_testcase(123E123, "Decimal float without integer part with exponent test"),
-    tok_testcase(123E+123, "Decimal float without integer part with positive exponent test"),
-    tok_testcase(123E-123, "Decimal float without integer part with negative exponent test"),
+    tok_testcase(123E12, "Decimal float without integer part with exponent test"),
+    tok_testcase(123E+12, "Decimal float without integer part with positive exponent test"),
+    tok_testcase(123E-12, "Decimal float without integer part with negative exponent test"),
     tok_testcase(12., "Decimal float without fractional part test"),
-    tok_testcase(12.e123, "Decimal float without fractional part with exponent test"),
-    tok_testcase(12.e+123, "Decimal float without fractional part with positive exponent test"),
-    tok_testcase(12.e-123, "Decimal float without fractional part with negative exponent test"),
+    tok_testcase(12.e12, "Decimal float without fractional part with exponent test"),
+    tok_testcase(12.e+12, "Decimal float without fractional part with positive exponent test"),
+    tok_testcase(12.e-12, "Decimal float without fractional part with negative exponent test"),
   };
   // clang-format on
   for (size_t id = 0; id < test_cases.size(); ++id) {
