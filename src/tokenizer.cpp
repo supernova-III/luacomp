@@ -416,6 +416,7 @@ EvaluateNumberResult EvaluateNumber(StringIterator &iter) {
       base = 16;
       exponent_base = 2;
       checker = isHexadecimal;
+      c = iter.Next();
     }
   }
 
