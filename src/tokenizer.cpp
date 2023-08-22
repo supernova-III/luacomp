@@ -364,18 +364,9 @@ double TokenIterator::tryEvaluateNumber() {
   StringIterator start = input_iter_;
   const auto [number, error] = EvaluateNumber(input_iter_);
   switch (error) {
-    case EvaluateNumberResult::Error::NO_INTEGER_AND_FRACTIONAL_PART: {
+    case EvaluateNumberResult::Error::MALFORMED: {
       throw RuntimeError(
-          "Lexical error %s:%llu:%llu: a number must have either "
-          "integer "
-          "or fractional part.",
-          input_name_, line_, col_);
-    }
-    case EvaluateNumberResult::Error::UNEXPECTED_END_OF_EXPONENT_PART: {
-      throw RuntimeError(
-          "Lexical error %s:%llu:%llu: unexpected end of the exponent "
-          "part.",
-          line_, col_);
+          "Lexical error %s:%llu:%llu: malformed number literal", line_, col_);
     }
     default: break;
   }
@@ -435,13 +426,17 @@ EvaluateNumberResult EvaluateNumber(StringIterator &iter) {
     const String fractional_part = iter - fractional_part_start;
 
     if (integer_part.len == 0 && fractional_part.len == 0) {
-      result.error =
-          EvaluateNumberResult::Error::NO_INTEGER_AND_FRACTIONAL_PART;
+      result.error = EvaluateNumberResult::Error::MALFORMED;
       return result;
     }
 
     auto [res_frac, power_of_base] = evaluateInteger(fractional_part, base);
     evaluated_fractional_part = res_frac / power_of_base;
+  } else {
+    if (integer_part.len == 0) {
+      result.error = EvaluateNumberResult::Error::MALFORMED;
+      return result;
+    }
   }
 
   c = iter.Peek();
@@ -458,8 +453,7 @@ EvaluateNumberResult EvaluateNumber(StringIterator &iter) {
     iter.IterateWhile(isDigit);
     const String exp_part = iter - exp_part_start;
     if (exp_part.len == 0) {
-      result.error =
-          EvaluateNumberResult::Error::UNEXPECTED_END_OF_EXPONENT_PART;
+      result.error = EvaluateNumberResult::Error::MALFORMED;
       return result;
     }
     const auto [exponent_integer, _] = evaluateInteger(exp_part, 10);

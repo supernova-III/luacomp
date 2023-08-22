@@ -1,6 +1,5 @@
 #include "lib.hh"
 #include "tokenizer.hh"
-#define GTEST_BREAK_ON_FAILURE 1
 #include <gtest/gtest.h>
 #include <array>
 
@@ -22,20 +21,22 @@ bool operator==(const Token& left, const Token& right) {
 template <typename T, typename U>
 struct TestCase {
   T input;
-  U expected_value;
+  U expected;
   String desc;
 };
 
-TEST(Tokenizer, TryEvaluateInteger) {
-#define tok_testcase(val, expected, description)                   \
-  TestCase<String, EvaluateNumberResult> {                         \
-    .input = String(val),                                          \
-    .expected_value = {expected, EvaluateNumberResult::Error::OK}, \
-    .desc = description                                            \
+TEST(Tokenizer, TryEvaluateNumber) {
+#define tok_testcase(val, exp, description)                                   \
+  TestCase<String, EvaluateNumberResult> {                                    \
+    .input = String(val), .expected = {exp, EvaluateNumberResult::Error::OK}, \
+    .desc = description                                                       \
   }
   // clang-format off
   auto test_cases = std::array{
     tok_testcase("23",                  23,                     "Decimal integer"),
+    tok_testcase("00",                  0,                      "Decimal integer"),
+    tok_testcase("00.000",              0,                      "Decimal integer"),
+    tok_testcase(".00",                  0,                      "Decimal integer"),
     tok_testcase("23.123",              23.123,                 "Decimal float"),
     tok_testcase("23.123e12",           23.123e12,              "Decimal float with exponent"),
     tok_testcase("23.123e+12",          23.123e+12,             "Decimal float with positive exponent"),
@@ -72,9 +73,35 @@ TEST(Tokenizer, TryEvaluateInteger) {
     auto& test_case = test_cases[id];
     StringIterator iter(test_case.input);
     const auto [number, error] = EvaluateNumber(iter);
-    EXPECT_DOUBLE_EQ(test_case.expected_value.number, number)
+    EXPECT_DOUBLE_EQ(test_case.expected.number, number)
         << "Test #" << id << ": " << test_case.desc.data;
-    EXPECT_EQ(test_case.expected_value.error, error)
+    EXPECT_EQ(test_case.expected.error, error)
+        << "Test #" << id << ": " << test_case.desc.data;
+  }
+}
+
+TEST(Tokenizer, TryEvaluateNumber_Errors) {
+  using TestCase = TestCase<String, EvaluateNumberResult::Error>;
+#define malformed(str, desc)                          \
+  TestCase {                                          \
+    str, EvaluateNumberResult::Error::MALFORMED, desc \
+  }
+  // clang-format off
+  auto test_cases = std::array{
+    malformed("0xgeefff", "Invalid hex integer"),
+    malformed("0x.geef", "Invalid hex float without integer part"),
+    malformed("0xgefff.", "Invalid hex float without fractional part"),
+    malformed("0x.", "Invalid hex float without fractional part"),
+    malformed("0x.1p-", "Incomplete exponent float"),
+    malformed(".1e-", "Incomplete exponent dec"),
+  };
+// clang-format on
+#undef malformed
+  for (size_t id = 0; id < test_cases.size(); ++id) {
+    auto& test_case = test_cases[id];
+    StringIterator iter(test_case.input);
+    const auto [_, error] = EvaluateNumber(iter);
+    EXPECT_EQ(test_case.expected, error)
         << "Test #" << id << ": " << test_case.desc.data;
   }
 }

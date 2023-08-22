@@ -77,8 +77,7 @@ struct EvaluateNumberResult {
   double number;
   enum struct Error {
     OK,
-    NO_INTEGER_AND_FRACTIONAL_PART,
-    UNEXPECTED_END_OF_EXPONENT_PART
+    MALFORMED
   } error = Error::OK;
 };
 
