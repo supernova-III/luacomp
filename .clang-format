@@ -5,4 +5,4 @@ AllowShortCaseLabelsOnASingleLine: true
 IndentCaseBlocks: false
 AllowShortEnumsOnASingleLine: false
 AllowShortFunctionsOnASingleLine: Inline
-AlignAfterOpenBracket: DontAlign
+AlignAfterOpenBracket: AlwaysBreak

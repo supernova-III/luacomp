@@ -77,7 +77,8 @@ struct EvaluateNumberResult {
   double number;
   enum struct Error {
     OK,
-    MALFORMED
+    MALFORMED,
+    INCOMPLETE_EXPONENT
   } error = Error::OK;
 };
 
@@ -91,6 +92,9 @@ struct Token {
     double number;
   } value;
 };
+
+String ProcessRawStringLiteral(
+    const String& string_literal, ScratchAllocator& scratch);
 
 // Iterates over provided string, recognizing tokens. It's not assumed to store
 // all recognized tokens, just the last one.

@@ -24,6 +24,19 @@ class SystemError final : public RuntimeError {
   SystemError(const char *format, ...);
 };
 
+// Allocator that provides memory for temporary usage. All allocations return
+// the same memory address, so it's safe to think that the content of the memory
+// is only correct right after the allocation and before the next allocation.
+// Thread unsafe
+class ScratchAllocator {
+  uint8_t *memory_;
+  size_t pool_size_;
+
+ public:
+  ScratchAllocator(size_t pool_size);
+  uint8_t *Allocate(size_t size) const noexcept;
+};
+
 // Allocator that allocates memory from buffers that connected via linked
 // list, to avoid expensive reallocation when another buffer is full. This
 // allocator never frees the memory.
@@ -85,10 +98,10 @@ struct String {
 
 class StringIterator {
   size_t pos_;
-  String &string_;
+  const String &string_;
 
  public:
-  StringIterator(String &string) noexcept : string_(string), pos_() {}
+  StringIterator(const String &string) noexcept : string_(string), pos_() {}
 
   // Peeks current element
   char Peek() const noexcept;

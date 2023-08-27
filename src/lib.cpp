@@ -28,6 +28,20 @@ PoolAllocator::PoolAllocator(size_t size)
 
 #undef FORMAT_MESSAGE
 
+ScratchAllocator::ScratchAllocator(size_t pool_size) : pool_size_(pool_size) {
+  memory_ = static_cast<uint8_t*>(calloc(pool_size_, 1));
+  if (!memory_) {
+    throw RuntimeError("Unable to allocate scratch memory\n");
+  }
+}
+
+uint8_t* ScratchAllocator::Allocate(size_t size) const noexcept {
+  if (size >= pool_size_) {
+    return nullptr;
+  }
+  return memory_;
+}
+
 uint8_t* PoolAllocator::Allocate(size_t size) {
   const auto new_size = size + current_pool_->size;
   if (new_size > current_pool_->capacity) {

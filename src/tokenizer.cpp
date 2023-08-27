@@ -1,5 +1,9 @@
 #include "tokenizer.hh"
 
+// Note: scratch allocator is probably to be shared between different compiler
+// parts. Will see.
+ScratchAllocator *scratch_;
+
 #define VAR(str, tok) \
   { String{str, sizeof(str) - 1}, tok }
 #define KWTABLE_ENTRY3(c, v0, t0, v1, t1, v2, t2) \
@@ -153,7 +157,8 @@ LuaTokenType KeywordsTable::operator[](const String &string) const noexcept {
 #define TTENTRY1(trie, mt, c0, t0) \
   trie[mt] = {.main_type = mt, .size = 1, .variants = {{.c = c0, .t = t0}}}
 #define TTENTRY2(trie, mt, c1, t1, c2, t2) \
-  trie[mt] = {.main_type = mt,             \
+  trie[mt] = {                             \
+      .main_type = mt,                     \
       .size = 2,                           \
       .variants = {{.c = c1, .t = t1}, {.c = c2, .t = t2}}}
 
@@ -245,10 +250,13 @@ class TokenTable {
 }  // namespace
 
 TokenIterator::TokenIterator(const char *input_name, String input)
-    : input_name_(input_name),
-      input_(input),
+    : input_(input),
+      input_name_(input_name),
       input_iter_(input_),
-      string_table_(128) {}
+      string_table_(128) {
+  static auto scratch = ScratchAllocator(4 * 1024);
+  scratch_ = &scratch;
+}
 
 const Token &TokenIterator::operator*() const noexcept {
   return current_token_;
@@ -272,6 +280,22 @@ const TokenIterator &TokenIterator::operator++() {
 TokenIterator_tokenization_start:
   char c = input_iter_.Peek();
   switch (c) {
+    case '\'':
+    case '"': {
+      const auto start = input_iter_;
+      input_iter_.IterateWhile([&](char current) -> bool {
+        ++col_;
+        return current != c;
+      });
+      // It may contain unprocessed escape sequences
+      const auto raw_string_literal = input_iter_ - start;
+      auto processed_string_literal =
+          ProcessRawStringLiteral(raw_string_literal, *scratch_);
+      const char *string_literal =
+          string_table_.Insert(processed_string_literal);
+      current_token_.type = TOKEN_SHORT_STRING_LITERAL;
+      current_token_.value.string_literal = string_literal;
+    } break;
     // Scans either a keyword or an identifer. The algorithm is as follows:
     // 1. Save the current iterator that points to the first character in a word
     // 2. Iterate over the input string until non-alphanumeric character is met
@@ -349,6 +373,7 @@ TokenIterator_tokenization_start:
     case '\n': {
       ++line_;
       col_ = 0;
+      [[fallthrough]];
     }
     case ' ':
     case '\t':
@@ -453,7 +478,7 @@ EvaluateNumberResult EvaluateNumber(StringIterator &iter) {
     iter.IterateWhile(isDigit);
     const String exp_part = iter - exp_part_start;
     if (exp_part.len == 0) {
-      result.error = EvaluateNumberResult::Error::MALFORMED;
+      result.error = EvaluateNumberResult::Error::INCOMPLETE_EXPONENT;
       return result;
     }
     const auto [exponent_integer, _] = evaluateInteger(exp_part, 10);
@@ -467,4 +492,60 @@ EvaluateNumberResult EvaluateNumber(StringIterator &iter) {
   result.number =
       (evaluated_integer_part + evaluated_fractional_part) * evaluated_exponent;
   return result;
+}
+
+String ProcessRawStringLiteral(
+    const String &string, ScratchAllocator &scratch) {
+  StringIterator iter(string);
+  auto buffer = (char *)scratch.Allocate(string.len);
+  size_t index = 0;
+  if (buffer == nullptr) {
+    throw RuntimeError(
+        "Cannot allocate %llu bytes from the scratch memory", string.len);
+  }
+
+  while (iter && index < string.len) {
+    char c = iter.Peek();
+    if (c != '\\') {
+      buffer[index++] = c;
+    } else {
+      c = iter.Next();
+      switch (c) {
+        case 'a': buffer[index++] = '\a'; break;
+        case 'b': buffer[index++] = '\b'; break;
+        case 'f': buffer[index++] = '\f'; break;
+        case 'n': buffer[index++] = '\n'; break;
+        case 'r': buffer[index++] = '\r'; break;
+        case 'v': buffer[index++] = '\v'; break;
+        case '\'':
+        case '\\':
+        case '"': buffer[index++] = c; break;
+        case 'x': {
+          c = iter.Next();
+          size_t i = 0;
+          while (isHexadecimal(c) && i < 2) {
+            buffer[index++] = c;
+            ++i;
+            c = iter.Next();
+          }
+          if (i >= 2) {
+            throw RuntimeError("Invalid UTF-8 codepoint");
+          }
+        } break;
+        case 'd': {
+          c = iter.Next();
+          size_t i = 0;
+          while (isDigit(c) && i < 3) {
+            buffer[index++] = c;
+            ++i;
+            c = iter.Next();
+          }
+          if (i >= 3) {
+            throw RuntimeError("Invalid ASCII codepoint");
+          }
+        } break;
+      }
+    }
+  }
+  return String(buffer, index);
 }
