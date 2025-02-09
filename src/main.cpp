@@ -6,6 +6,7 @@
 #include <vector>
 #include "lib.hh"
 #include "tokenizer.hh"
+#include "parser.hh"
 
 struct File {
   std::ifstream stream;
@@ -29,8 +30,19 @@ int main(int argc, char* argv[]) try {
   auto iter = TokenIterator(argv[1], file.Content());
   while (++iter) {
     const auto& current = *iter;
-    if (current.type == LuaTokenType::TOKEN_NUMBER) {
-      std::cout << current.value.number << std::endl;
+    switch (current.type) {
+      case TOKEN_NUMBER: {
+        std::cout << "Token type: number" << std::endl;
+        std::cout << " value: ";
+        std::cout << current.value.number << std::endl;
+      } break;
+      case TOKEN_ASSIGN: {
+        std::cout << "Token type: assignment operator" << std::endl;
+      } break;
+      case TOKEN_IDENTIFIER: {
+        std::cout << "Token type: identifier" << std::endl;
+        std::cout << " value: " << current.value.identifier << std::endl;
+      } break;
     }
   }
   return 0;

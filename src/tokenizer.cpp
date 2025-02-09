@@ -4,8 +4,7 @@
 // parts. Will see.
 ScratchAllocator *scratch_;
 
-#define VAR(str, tok) \
-  { String{str, sizeof(str) - 1}, tok }
+#define VAR(str, tok) {String{str, sizeof(str) - 1}, tok}
 #define KWTABLE_ENTRY3(c, v0, t0, v1, t1, v2, t2) \
   trie_[idx(#@ c)] = {                            \
       .size = 3, .variants = {VAR(v0, t0), VAR(v1, t1), VAR(v2, t2)}}
