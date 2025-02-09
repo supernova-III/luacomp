@@ -173,8 +173,9 @@ StringIterator::operator bool() const noexcept {
 
 String StringIterator::operator-(const StringIterator& other) const {
   if (&string_ != &other.string_) {
-    throw RuntimeError("Iterators represent different strings: %p vs. %p",
-        &string_, &other.string_);
+    throw RuntimeError(
+        "Iterators represent different strings: %p vs. %p", &string_,
+        &other.string_);
   }
   if (other.pos_ >= pos_) {
     return {};
@@ -184,8 +185,7 @@ String StringIterator::operator-(const StringIterator& other) const {
 }
 
 bool StringIterator::IterateTo(char target) noexcept {
-  while (increment() && Peek() != target)
-    ;
+  while (increment() && Peek() != target);
   return Peek() == target;
 }
 

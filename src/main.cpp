@@ -1,49 +1,23 @@
 #include <cstdio>
 #include <cstdlib>
+#include <iostream>
+#include <filesystem>
+#include <fstream>
+#include <vector>
 #include "lib.hh"
 #include "tokenizer.hh"
 
 struct File {
-  char* buffer;
-  size_t size;
-  FILE* handle;
+  std::ifstream stream;
+  std::vector<char> data;
 
-  File(const char* path) {
-    auto error = fopen_s(&handle, path, "rb");
-    if (error) {
-      throw SystemError("Unable to create file %s", path);
-    }
-    if (fseek(handle, 0, SEEK_END)) {
-      throw SystemError("Unable to get input file size.");
-    }
-    const auto file_size = ftell(handle);
-    fseek(handle, 0, 0);
-    buffer = static_cast<char*>(calloc(file_size + 1, 1));
-    if (!buffer) {
-      throw RuntimeError("Unable to allocate memory to read input file.");
-    }
-    size = fread(buffer, 1, file_size, handle);
-    if (size != file_size) {
-      throw SystemError("Unable to read input file %s", path);
-    }
+  File(const std::filesystem::path& path)
+      : data(std::filesystem::file_size(path)), stream(path) {
+    // stream.exceptions(std::ifstream::failbit);
+    stream.read(data.data(), data.size());
   }
 
-  File() = delete;
-  File(const File&) = delete;
-  File& operator=(const File&) = delete;
-  File(File&&) = default;
-  File& operator=(File&&) = default;
-
-  String Content() const { return String(buffer, size); }
-
-  ~File() {
-    if (buffer) {
-      free(buffer);
-    }
-    if (handle) {
-      fclose(handle);
-    }
-  }
+  String Content() const { return String(data.data(), data.size()); }
 };
 
 int main(int argc, char* argv[]) try {
@@ -54,9 +28,14 @@ int main(int argc, char* argv[]) try {
   auto file = File(argv[1]);
   auto iter = TokenIterator(argv[1], file.Content());
   while (++iter) {
-    auto current = *iter;
+    const auto& current = *iter;
+    if (current.type == LuaTokenType::TOKEN_NUMBER) {
+      std::cout << current.value.number << std::endl;
+    }
   }
   return 0;
+} catch (const std::runtime_error& e) {
+  std::cerr << e.what() << std::endl;
 } catch (const RuntimeError& e) {
   e.PrintToStdOut();
 }

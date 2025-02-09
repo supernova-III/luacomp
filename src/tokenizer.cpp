@@ -289,10 +289,9 @@ TokenIterator_tokenization_start:
       });
       // It may contain unprocessed escape sequences
       const auto raw_string_literal = input_iter_ - start;
-      auto processed_string_literal =
-          ProcessRawStringLiteral(raw_string_literal, *scratch_);
-      const char *string_literal =
-          string_table_.Insert(processed_string_literal);
+      // auto processed_string_literal =
+      //     ProcessRawStringLiteral(raw_string_literal, *scratch_);
+      const char *string_literal = string_table_.Insert(raw_string_literal);
       current_token_.type = TOKEN_SHORT_STRING_LITERAL;
       current_token_.value.string_literal = string_literal;
     } break;
@@ -381,6 +380,7 @@ TokenIterator_tokenization_start:
       NextChar();
       goto TokenIterator_tokenization_start;
     } break;
+    default: NextChar(); break;
   }
   return *this;
 }
