@@ -82,9 +82,12 @@ TEST(Tokenizer, TryEvaluateNumber) {
 
 TEST(Tokenizer, TryEvaluateNumber_Errors) {
   using TestCase = TestCase<String, EvaluateNumberResult::Error>;
-#define malformed(str, desc)                          \
-  TestCase {                                          \
-    str, EvaluateNumberResult::Error::MALFORMED, desc \
+#define malformed(str, desc) \
+  TestCase{str, EvaluateNumberResult::Error::MALFORMED, desc}
+
+#define malformed_exp(str, desc)                                \
+  TestCase {                                                    \
+    str, EvaluateNumberResult::Error::INCOMPLETE_EXPONENT, desc \
   }
   // clang-format off
   auto test_cases = std::array{
@@ -92,11 +95,12 @@ TEST(Tokenizer, TryEvaluateNumber_Errors) {
     malformed("0x.geef", "Invalid hex float without integer part"),
     malformed("0xgefff.", "Invalid hex float without fractional part"),
     malformed("0x.", "Invalid hex float without fractional part"),
-    malformed("0x.1p-", "Incomplete exponent float"),
-    malformed(".1e-", "Incomplete exponent dec"),
+    malformed_exp("0x.1p-", "Incomplete exponent float"),
+    malformed_exp(".1e-", "Incomplete exponent dec"),
   };
 // clang-format on
 #undef malformed
+#undef malformed_exp
   for (size_t id = 0; id < test_cases.size(); ++id) {
     auto& test_case = test_cases[id];
     StringIterator iter(test_case.input);
